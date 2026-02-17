@@ -8,7 +8,7 @@ A Windows tray application for monitoring Claude.ai usage limits in real-time.
 
 You have a 5-hour session limit and a 7-day weekly limit on Claude. You're constantly wondering: "How much do I have left?" So you alt-tab to settings, check the usage page, come back. Repeat 10 times a day.
 
-This app sits in your system tray and shows you at a glance: How many hours left in your session. How many in your weekly limit. That's it.
+This app sits in your system tray and shows you at a glance: How many percent and hours left in your session. How many in your weekly limit. That's it.
 
 ## What Works ✅
 
