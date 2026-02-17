@@ -100,4 +100,6 @@ If you know why the API calls are failing after successful login, PRs are welcom
 
 MIT License – See [LICENSE](LICENSE) file
 
+---
+
 **Built because I got tired of alt-tabbing to check my Claude limits.**
