@@ -2,7 +2,7 @@
 
 A Windows tray application for monitoring Claude.ai usage limits in real-time.
 
-**Status:** In Development – Authentication works, API data retrieval needs debugging.
+**Status:** *In Development* – Authentication works, API data retrieval needs debugging.
 
 ## The Problem
 
