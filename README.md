@@ -46,8 +46,8 @@ No configuration. No cookie headers. Just login and forget it's running.
 
 ### Build & Run
 ```bash
-git clone https://github.com/yourusername/claude-usage-monitor
-cd claude-usage-monitor
+git clone https://github.com/Firnschnee/Tray-Usage-Monitor.git
+cd Tray-Usage-Monitor
 dotnet restore
 dotnet build -c Release
 dotnet run
