@@ -23,17 +23,17 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 ## What you see
 
 - **Tray icon** with session percentage (green/yellow/red)
-- **Tooltip** with session %, weekly %, and reset timers
-- **Double-click** for detail popup with progress bars
-- **Right-click** menu: Details, Refresh, Exit
+- **Tooltip** with session %, weekly % (with pace), and reset timers
+- **Widget** opens automatically on startup and on double-click — shows progress bars with colored pace markers and per-bar subtitles (reset timer + pace status, e.g. `Reset: 1h 23m | +12% ahead`)
+- **Right-click** menu: Details, Refresh, Copy Raw JSON, Exit
 
 ## How it actually works (technically)
 
-1. Reads `"Claude Code-credentials"` from Windows Credential Manager (or `~/.claude/.credentials.json`)
+1. Reads `"Claude Code-credentials"` from Windows Credential Manager, then falls back to `%USERPROFILE%\.claude\.credentials.json` (and `%HOMEDRIVE%%HOMEPATH%\.claude\` as a second fallback)
 2. Extracts the `claudeAiOauth.accessToken` 
 3. Calls `GET https://api.anthropic.com/api/oauth/usage` with Bearer auth
 4. Parses `five_hour`, `seven_day`, and `extra_usage` from JSON response
-5. Updates tray icon every 2 minutes
+5. Updates tray icon every 2 minutes (every 60 seconds while the widget is open)
 
 Inspired by [omachala's bash gist](https://gist.github.com/omachala/5ea5af4bfa0b194a1d48d6f2eedd6274) which does the same thing for macOS/CLI.
 
@@ -55,5 +55,3 @@ Zero external dependencies. Just .NET 8 and `System.Text.Json`.
 
 ## License
 MIT License – See [LICENSE](LICENSE) file
-
-MIT
