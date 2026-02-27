@@ -54,5 +54,6 @@ Run `claude login` in your terminal. The app picks up the new token automaticall
 Zero external dependencies. Just .NET 8 and `System.Text.Json`.
 
 ## License
+MIT License – See [LICENSE](LICENSE) file
 
 MIT
