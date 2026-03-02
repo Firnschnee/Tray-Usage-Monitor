@@ -1,6 +1,6 @@
-# Claude Usage Monitor v2
+# Claude Usage Monitor
 
-Windows tray app that shows your Claude.ai usage at a glance.
+Windows tray app that shows your Claude.ai usage at a glance — including a widget embedded directly in the taskbar.
 
 ## How it works
 
@@ -24,11 +24,14 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 
 <img width="402" height="235" alt="Tray Usage Monitor" src="https://github.com/user-attachments/assets/0479ef8d-bcb8-445e-9b56-df71c411852c" />
 
+- **Taskbar widget** — embedded next to the system tray, always visible. Shows two progress bars (`5h` session + `7d` weekly) with percentage and countdown, green/yellow/red by utilization. Updates automatically when the displayed countdown changes.
 - **Tray icon** with session percentage (green/yellow/red)
 - **Tooltip** with session %, weekly % (with pace), and reset timers
-- **Widget** opens automatically on startup and on double-click — shows progress bars with colored pace markers and per-bar subtitles (reset timer + pace status, e.g. `Reset: 1h 23m | +12% ahead`)
+- **Details popup** opens on startup and on double-click — progress bars with colored pace markers and per-bar subtitles (reset timer + pace status, e.g. `Reset: 1h 23m | +12% ahead`)
 - **Right-click** menu: Details, Refresh, Copy Raw JSON, Exit
 - **Always on Top**
+
+If taskbar embedding isn't available (unsupported shell, modified taskbar), the app falls back gracefully to tray icon + popup only.
 
 ## How it actually works (technically)
 
@@ -48,7 +51,9 @@ Run `claude login` in your terminal. The app picks up the new token automaticall
 
 ```
 ├── Program.cs            # Entry point
-├── MainForm.cs           # Tray icon, polling, UI
+├── MainForm.cs           # Tray icon, polling, UI orchestration
+├── TaskbarWidget.cs      # Taskbar-embedded widget (Win32 reparenting + layered window)
+├── Win32Interop.cs       # P/Invoke declarations for Win32 APIs
 ├── UsageFetcher.cs       # Single HTTP call to Anthropic API
 ├── UsageData.cs          # Data model
 └── CredentialReader.cs   # Reads OAuth token from Credential Manager / file

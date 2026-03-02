@@ -19,6 +19,7 @@ public sealed class MainForm : Form
 
     private Form? _widget;
     private System.Windows.Forms.Timer? _widgetTimer;
+    private TaskbarWidget? _taskbarWidget;
 
     private static readonly Color COk = Color.FromArgb(34, 197, 94);
     private static readonly Color CWarn = Color.FromArgb(251, 191, 36);
@@ -61,6 +62,7 @@ public sealed class MainForm : Form
             startup.Dispose();
             await PollAsync();
             _pollTimer.Start();
+            _taskbarWidget = new TaskbarWidget(_lastData);
             ShowDetails();
         };
         startup.Start();
@@ -107,6 +109,7 @@ public sealed class MainForm : Form
             var color = pct >= 90 ? CCrit : pct >= 75 ? CWarn : COk;
             SetIcon($"{pct:0}%", color, data.TooltipText);
             RefreshWidget();
+            _taskbarWidget?.Update(data);
         }
         catch (UnauthorizedAccessException)
         {
@@ -354,7 +357,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _widgetTimer?.Dispose(); _widget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); }
+        if (disposing) { _widgetTimer?.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); }
         base.Dispose(disposing);
     }
 }
