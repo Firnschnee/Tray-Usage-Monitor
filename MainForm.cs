@@ -85,11 +85,8 @@ public sealed class MainForm : Form
                 // Diagnostik: Warum kein Token?
                 var userProfile = Environment.GetEnvironmentVariable("USERPROFILE") ?? "?";
                 var credFile = Path.Combine(userProfile, ".claude", ".credentials.json");
-                var fileExists = File.Exists(credFile);
-                var diagMsg = $"No OAuth token found.\n" +
-                              $"File: {credFile}\n" +
-                              $"Exists: {fileExists}\n" +
-                              $"Please run 'claude login'.";
+                System.Diagnostics.Debug.WriteLine($"[Poll] Credentials not found. File: {credFile}, Exists: {File.Exists(credFile)}");
+                var diagMsg = "No OAuth token found.\nPlease run 'claude login'.";
 
                 SetIcon("!", CCrit, diagMsg);
                 if (!_tokenWarningShown)
@@ -148,14 +145,11 @@ public sealed class MainForm : Form
         refresh.Click += async (_, _) => await PollAsync();
         m.Items.Add(refresh);
 
-        var raw = new ToolStripMenuItem("Copy Raw JSON");
+        var raw = new ToolStripMenuItem("Copy Status Text");
         raw.Click += (_, _) =>
         {
             if (_lastData?.TooltipText != null)
-            {
-                // Wir kopieren die letzte Raw-Response falls vorhanden
                 Clipboard.SetText(_lastData.TooltipText);
-            }
         };
         m.Items.Add(raw);
 

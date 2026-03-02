@@ -171,7 +171,7 @@ public static class CredentialReader
                 var val = token.GetString();
                 if (!string.IsNullOrWhiteSpace(val))
                 {
-                    Log($"accessToken extracted: {val[..Math.Min(20, val.Length)]}...");
+                    Log($"accessToken extracted ({val.Length} chars)");
                     return val;
                 }
             }
