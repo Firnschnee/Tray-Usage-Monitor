@@ -1,6 +1,6 @@
 # Claude Usage Monitor
 
-Windows tray app that shows your Claude.ai usage at a glance — including a widget embedded directly in the taskbar.
+Windows tray app that shows your Claude.ai usage at a glance - including a widget embedded directly in the taskbar.
 
 ## How it works
 
@@ -22,7 +22,7 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 
 ## What you see
 
-<img width="402" height="235" alt="Tray Usage Monitor" src="https://github.com/user-attachments/assets/0479ef8d-bcb8-445e-9b56-df71c411852c" />
+<img width="699" height="47" alt="taskbar" src="https://github.com/user-attachments/assets/3312f88c-9564-4503-83cf-096a7a72ef35" />
 
 - **Taskbar widget** — embedded next to the system tray, always visible. Shows two progress bars (`5h` session + `7d` weekly) with percentage and countdown, green/yellow/red by utilization. Updates automatically when the displayed countdown changes.
 - **Tray icon** with session percentage (green/yellow/red)
@@ -30,6 +30,8 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 - **Details popup** opens on startup and on double-click — progress bars with colored pace markers and per-bar subtitles (reset timer + pace status, e.g. `Reset: 1h 23m | +12% ahead`)
 - **Right-click** menu: Details, Refresh, Copy Raw JSON, Exit
 - **Always on Top**
+
+<img width="402" height="235" alt="Tray Usage Monitor" src="https://github.com/user-attachments/assets/0479ef8d-bcb8-445e-9b56-df71c411852c" />
 
 If taskbar embedding isn't available (unsupported shell, modified taskbar), the app falls back gracefully to tray icon + popup only.
 
