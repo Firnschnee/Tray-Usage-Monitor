@@ -22,10 +22,13 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 
 ## What you see
 
+<img width="402" height="235" alt="Tray Usage Monitor" src="https://github.com/user-attachments/assets/0479ef8d-bcb8-445e-9b56-df71c411852c" />
+
 - **Tray icon** with session percentage (green/yellow/red)
 - **Tooltip** with session %, weekly % (with pace), and reset timers
 - **Widget** opens automatically on startup and on double-click — shows progress bars with colored pace markers and per-bar subtitles (reset timer + pace status, e.g. `Reset: 1h 23m | +12% ahead`)
 - **Right-click** menu: Details, Refresh, Copy Raw JSON, Exit
+- **Always on Top**
 
 ## How it actually works (technically)
 
