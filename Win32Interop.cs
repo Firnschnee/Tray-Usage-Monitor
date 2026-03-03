@@ -116,6 +116,9 @@ internal static class Win32Interop
     [DllImport("gdi32.dll")]
     public static extern bool DeleteObject(IntPtr hObject);
 
+    [DllImport("user32.dll")]
+    public static extern bool DestroyIcon(IntPtr hIcon);
+
     [DllImport("gdi32.dll")]
     public static extern IntPtr CreateDIBSection(
         IntPtr hdc, ref BITMAPINFOHEADER pbmi, uint iUsage,

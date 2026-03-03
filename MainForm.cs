@@ -16,6 +16,7 @@ public sealed class MainForm : Form
     private bool _polling;
     private int _errors;
     private bool _tokenWarningShown;
+    private IntPtr _trayIconHandle = IntPtr.Zero;
 
     private Form? _widget;
     private System.Windows.Forms.Timer? _widgetTimer;
@@ -41,9 +42,11 @@ public sealed class MainForm : Form
 
         _fetcher = new UsageFetcher();
 
+        var (initIcon, initHandle) = MakeIcon("...", CGray);
+        _trayIconHandle = initHandle;
         _trayIcon = new NotifyIcon
         {
-            Icon = MakeIcon("...", CGray),
+            Icon = initIcon,
             Text = "Claude Usage Monitor",
             ContextMenuStrip = BuildMenu(),
             Visible = true,
@@ -301,7 +304,7 @@ public sealed class MainForm : Form
     // ICON RENDERING
     // ═══════════════════════════════════════
 
-    private static Icon MakeIcon(string text, Color color)
+    private static (Icon icon, IntPtr hicon) MakeIcon(string text, Color color)
     {
         const int sz = 32;
         using var bmp = new Bitmap(sz, sz);
@@ -325,16 +328,21 @@ public sealed class MainForm : Form
         using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         g.DrawString(text, font, brush, new RectangleF(0, 0, sz, sz), fmt);
 
-        return Icon.FromHandle(bmp.GetHicon());
+        var hicon = bmp.GetHicon();
+        return (Icon.FromHandle(hicon), hicon);
     }
 
     private void SetIcon(string text, Color color, string tooltip)
     {
         if (InvokeRequired) { BeginInvoke(() => SetIcon(text, color, tooltip)); return; }
         var old = _trayIcon.Icon;
-        _trayIcon.Icon = MakeIcon(text, color);
+        var oldHandle = _trayIconHandle;
+        var (newIcon, newHandle) = MakeIcon(text, color);
+        _trayIcon.Icon = newIcon;
+        _trayIconHandle = newHandle;
         _trayIcon.Text = tooltip.Length > 127 ? tooltip[..127] : tooltip;
         old?.Dispose();
+        if (oldHandle != IntPtr.Zero) Win32Interop.DestroyIcon(oldHandle);
     }
 
     // ═══════════════════════════════════════
@@ -351,7 +359,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _widgetTimer?.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); }
+        if (disposing) { _widgetTimer?.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
         base.Dispose(disposing);
     }
 }
