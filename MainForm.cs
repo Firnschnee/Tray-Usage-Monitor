@@ -17,9 +17,9 @@ public sealed class MainForm : Form
     private int _errors;
     private bool _tokenWarningShown;
     private IntPtr _trayIconHandle = IntPtr.Zero;
+    private readonly CancellationTokenSource _cts = new();
 
     private Form? _widget;
-    private System.Windows.Forms.Timer? _widgetTimer;
     private TaskbarWidget? _taskbarWidget;
 
     private static readonly Color COk = Color.FromArgb(34, 197, 94);
@@ -101,7 +101,7 @@ public sealed class MainForm : Form
             }
 
             _tokenWarningShown = false;
-            var data = await _fetcher.FetchAsync(token);
+            var data = await _fetcher.FetchAsync(token, _cts.Token);
             _lastData = data;
             _errors = 0;
 
@@ -111,6 +111,7 @@ public sealed class MainForm : Form
             RefreshWidget();
             _taskbarWidget?.Update(data);
         }
+        catch (OperationCanceledException) { }
         catch (UnauthorizedAccessException)
         {
             SetIcon("AUTH", CCrit, "OAuth token expired.\nRun 'claude login'.");
@@ -194,13 +195,7 @@ public sealed class MainForm : Form
         _widget.StartPosition = FormStartPosition.Manual;
         _widget.Location = new Point(screen.Right - 430, screen.Bottom - 120);
 
-        _widget.FormClosed += (_, _) =>
-        {
-            _widgetTimer?.Stop();
-            _widgetTimer?.Dispose();
-            _widgetTimer = null;
-            _widget = null;
-        };
+        _widget.FormClosed += (_, _) => _widget = null;
 
         if (_lastData != null)
             RefreshWidget();
@@ -211,10 +206,6 @@ public sealed class MainForm : Form
                 Location = new Point(20, 15), Size = new Size(370, 22),
                 ForeColor = CGray, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
             });
-
-        _widgetTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
-        _widgetTimer.Tick += async (_, _) => await PollAsync();
-        _widgetTimer.Start();
 
         _widget.Show();
 
@@ -359,7 +350,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _widgetTimer?.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
+        if (disposing) { _cts.Cancel(); _cts.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
         base.Dispose(disposing);
     }
 }

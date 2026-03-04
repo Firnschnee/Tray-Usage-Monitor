@@ -12,8 +12,17 @@ internal static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
 
-        Application.ThreadException += (_, e) => System.Diagnostics.Debug.WriteLine($"UI: {e.Exception}");
-        AppDomain.CurrentDomain.UnhandledException += (_, e) => System.Diagnostics.Debug.WriteLine($"Fatal: {e.ExceptionObject}");
+        Application.ThreadException += (_, e) =>
+            MessageBox.Show($"An unexpected error occurred:\n\n{e.Exception.Message}",
+                "Claude Usage Monitor \u2013 Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "claude-usage-monitor-crash.log");
+            File.WriteAllText(logPath, $"{DateTime.Now:u}\n{e.ExceptionObject}");
+            MessageBox.Show($"A fatal error occurred. Details saved to:\n{logPath}",
+                "Claude Usage Monitor \u2013 Fatal Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        };
 
         Application.Run(new MainForm());
     }
