@@ -1,4 +1,4 @@
-# Claude Usage Monitor
+## A Claude Usage Monitor in your Taskbar and with an optional always on top popup widget
 
 Windows tray app that shows your Claude.ai usage at a glance - including a widget embedded directly in the taskbar.
 
