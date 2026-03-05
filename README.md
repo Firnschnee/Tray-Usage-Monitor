@@ -9,8 +9,8 @@ A Windows tray app that shows your Claude.ai usage at a glance - including a wid
 The app reads the OAuth token that **Claude Code** stores in your Windows Credential Manager, then calls the Anthropic OAuth usage API. One HTTP request. No browser, no cookies, no WebView2, no manual configuration.
 
 ## Requirements:
-You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and logged in (`claude login`).
-Just .NET 8 - zero external dependencies. 
+You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and logged in (`claude login`) 
+and .NET 8 - zero external dependencies. 
 
 ## Setup
 
