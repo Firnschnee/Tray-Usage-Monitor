@@ -1,19 +1,26 @@
-## A Claude Usage Monitor in your Taskbar and with an optional always on top popup widget
+## Claude Usage Monitor - Taskbar Widget + Popup Window 
 
-Windows tray app that shows your Claude.ai usage at a glance - including a widget embedded directly in the taskbar.
+A Windows tray app that shows your Claude.ai usage at a glance - including a widget embedded directly in the taskbar.
+
+<img width="699" height="47" alt="taskbar" src="https://github.com/user-attachments/assets/3312f88c-9564-4503-83cf-096a7a72ef35" />
 
 ## How it works
 
 The app reads the OAuth token that **Claude Code** stores in your Windows Credential Manager, then calls the Anthropic OAuth usage API. One HTTP request. No browser, no cookies, no WebView2, no manual configuration.
 
-**Prerequisite:** You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and logged in (`claude login`).
+## Requirements:
+You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and logged in (`claude login`).
+Just .NET 8 - zero external dependencies. 
 
 ## Setup
+
+Use the `ClaudeUsageMonitor.exe` from the latest release 
+
+Or build it yourself: 
 
 ```bash
 git clone https://github.com/Firnschnee/Tray-Usage-Monitor.git
 cd Tray-Usage-Monitor
-dotnet restore
 dotnet build -c Release
 dotnet run
 ```
@@ -22,14 +29,11 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 
 ## What you see
 
-<img width="699" height="47" alt="taskbar" src="https://github.com/user-attachments/assets/3312f88c-9564-4503-83cf-096a7a72ef35" />
-
 - **Taskbar widget** — embedded next to the system tray, always visible. Shows two progress bars (`5h` session + `7d` weekly) with percentage and countdown, green/yellow/red by utilization. Updates automatically when the displayed countdown changes.
 - **Tray icon** with session percentage (green/yellow/red)
 - **Tooltip** with session %, weekly % (with pace), and reset timers
-- **Details popup** opens on startup and on double-click — progress bars with colored pace markers and per-bar subtitles (reset timer + pace status, e.g. `Reset: 1h 23m | +12% ahead`)
 - **Right-click** menu: Details, Refresh, Copy Raw JSON, Exit
-- **Always on Top**
+- **Popup window** — opens on startup and on double-click, always on top. Three progress bars: `5h` session, `7d` weekly, `extra usage` monthly — with colored pace markers and subtitles (e.g. Reset: 1h 23m | +12% ahead)
 
 <img width="402" height="235" alt="Tray Usage Monitor" src="https://github.com/user-attachments/assets/0479ef8d-bcb8-445e-9b56-df71c411852c" />
 
@@ -60,8 +64,6 @@ Run `claude login` in your terminal. The app picks up the new token automaticall
 ├── UsageData.cs          # Data model
 └── CredentialReader.cs   # Reads OAuth token from Credential Manager / file
 ```
-
-Zero external dependencies. Just .NET 8 and `System.Text.Json`.
 
 ## License
 MIT License – See [LICENSE](LICENSE) file
