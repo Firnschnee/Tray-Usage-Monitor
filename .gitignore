@@ -1,3 +1,13 @@
 bin/
 obj/
 AUDIT_REPORT.md
+
+# User-specific files
+*.user
+*.suo
+.vs/
+.idea/
+
+# OS
+Thumbs.db
+desktop.ini

@@ -12,15 +12,23 @@ public sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _pollTimer;
     private readonly UsageFetcher _fetcher;
 
+    private const int PollIntervalMs = 120_000;  // 2 min base
+    private const int MaxBackoffMs   = 960_000;  // 16 min cap
+
+    private readonly SemaphoreSlim _pollGuard = new(1, 1);
     private UsageData? _lastData;
-    private bool _polling;
     private int _errors;
+    private int _backoffMs = PollIntervalMs;
     private bool _tokenWarningShown;
     private IntPtr _trayIconHandle = IntPtr.Zero;
     private readonly CancellationTokenSource _cts = new();
 
     private Form? _widget;
     private TaskbarWidget? _taskbarWidget;
+
+    // Registered once per process; non-zero on success (range 0xC000–0xFFFF)
+    private static readonly uint _taskbarCreatedMsg =
+        Win32Interop.RegisterWindowMessage("TaskbarCreated");
 
     private static readonly Color COk = Color.FromArgb(34, 197, 94);
     private static readonly Color CWarn = Color.FromArgb(251, 191, 36);
@@ -54,12 +62,12 @@ public sealed class MainForm : Form
         _trayIcon.DoubleClick += (_, _) => ShowDetails();
 
         _pollTimer = new System.Windows.Forms.Timer { Interval = 120_000 }; // 2 min
-        _pollTimer.Tick += async (_, _) => await PollAsync();
+        _pollTimer.Tick += (_, _) => FireAndForget(PollAsync);
 
         // Load event won't fire because SetVisibleCore(false) prevents visibility.
         // Use a one-shot timer to kick off initial work once the message loop is running.
         var startup = new System.Windows.Forms.Timer { Interval = 200 };
-        startup.Tick += async (_, _) =>
+        startup.Tick += (_, _) => FireAndForget(async () =>
         {
             startup.Stop();
             startup.Dispose();
@@ -67,7 +75,7 @@ public sealed class MainForm : Form
             _pollTimer.Start();
             _taskbarWidget = new TaskbarWidget(_lastData);
             ShowDetails();
-        };
+        });
         startup.Start();
     }
 
@@ -77,8 +85,7 @@ public sealed class MainForm : Form
 
     private async Task PollAsync()
     {
-        if (_polling) return;
-        _polling = true;
+        if (!_pollGuard.Wait(0)) return;
 
         try
         {
@@ -88,7 +95,9 @@ public sealed class MainForm : Form
                 // Diagnostik: Warum kein Token?
                 var userProfile = Environment.GetEnvironmentVariable("USERPROFILE") ?? "?";
                 var credFile = Path.Combine(userProfile, ".claude", ".credentials.json");
+#if DEBUG
                 System.Diagnostics.Debug.WriteLine($"[Poll] Credentials not found. File: {credFile}, Exists: {File.Exists(credFile)}");
+#endif
                 var diagMsg = "No OAuth token found.\nPlease run 'claude login'.";
 
                 SetIcon("!", CCrit, diagMsg);
@@ -104,6 +113,8 @@ public sealed class MainForm : Form
             var data = await _fetcher.FetchAsync(token, _cts.Token);
             _lastData = data;
             _errors = 0;
+            _backoffMs = PollIntervalMs;
+            _pollTimer.Interval = PollIntervalMs;
 
             var pct = data.SessionPercent;
             var color = pct >= 90 ? CCrit : pct >= 75 ? CWarn : COk;
@@ -114,6 +125,7 @@ public sealed class MainForm : Form
         catch (OperationCanceledException) { }
         catch (UnauthorizedAccessException)
         {
+            _pollTimer.Stop(); // no point retrying until user re-auths
             SetIcon("AUTH", CCrit, "OAuth token expired.\nRun 'claude login'.");
             _trayIcon.ShowBalloonTip(8000, "Token expired",
                 "Please run 'claude login' in the terminal.", ToolTipIcon.Warning);
@@ -121,13 +133,15 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             _errors++;
+            _backoffMs = Math.Min(_backoffMs * 2, MaxBackoffMs);
+            _pollTimer.Interval = _backoffMs;
             SetIcon("ERR", CCrit, $"Error: {ex.Message}");
             if (_errors >= 3)
                 _trayIcon.ShowBalloonTip(5000, "Error", ex.Message, ToolTipIcon.Error);
         }
         finally
         {
-            _polling = false;
+            _pollGuard.Release();
         }
     }
 
@@ -146,7 +160,7 @@ public sealed class MainForm : Form
         m.Items.Add(new ToolStripSeparator());
 
         var refresh = new ToolStripMenuItem("Refresh");
-        refresh.Click += async (_, _) => await PollAsync();
+        refresh.Click += (_, _) => FireAndForget(PollAsync);
         m.Items.Add(refresh);
 
         var raw = new ToolStripMenuItem("Copy Status Text");
@@ -160,7 +174,7 @@ public sealed class MainForm : Form
         m.Items.Add(new ToolStripSeparator());
 
         var exit = new ToolStripMenuItem("Exit");
-        exit.Click += (_, _) => { _trayIcon.Visible = false; Application.Exit(); };
+        exit.Click += (_, _) => { _cts.Cancel(); _trayIcon.Visible = false; Application.Exit(); };
         m.Items.Add(exit);
 
         return m;
@@ -292,6 +306,24 @@ public sealed class MainForm : Form
     }
 
     // ═══════════════════════════════════════
+    // ASYNC HELPER
+    // ═══════════════════════════════════════
+
+    private static string TruncateTooltip(string text)
+    {
+        if (text.Length <= 127) return text;
+        var cut = text.LastIndexOf('\n', 126);
+        return cut > 0 ? text[..cut] : text[..127];
+    }
+
+    private static async void FireAndForget(Func<Task> action)
+    {
+        try { await action(); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Unhandled] {ex}"); }
+    }
+
+    // ═══════════════════════════════════════
     // ICON RENDERING
     // ═══════════════════════════════════════
 
@@ -331,7 +363,7 @@ public sealed class MainForm : Form
         var (newIcon, newHandle) = MakeIcon(text, color);
         _trayIcon.Icon = newIcon;
         _trayIconHandle = newHandle;
-        _trayIcon.Text = tooltip.Length > 127 ? tooltip[..127] : tooltip;
+        _trayIcon.Text = TruncateTooltip(tooltip);
         old?.Dispose();
         if (oldHandle != IntPtr.Zero) Win32Interop.DestroyIcon(oldHandle);
     }
@@ -339,6 +371,14 @@ public sealed class MainForm : Form
     // ═══════════════════════════════════════
     // LIFECYCLE
     // ═══════════════════════════════════════
+
+    protected override void WndProc(ref Message m)
+    {
+        // Re-embed the taskbar widget whenever Explorer restarts
+        if (_taskbarCreatedMsg != 0 && m.Msg == (int)_taskbarCreatedMsg)
+            _taskbarWidget?.Reattach();
+        base.WndProc(ref m);
+    }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -350,7 +390,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _cts.Cancel(); _cts.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
+        if (disposing) { _cts.Cancel(); _cts.Dispose(); _pollGuard.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
         base.Dispose(disposing);
     }
 }

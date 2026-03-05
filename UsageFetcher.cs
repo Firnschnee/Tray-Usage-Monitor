@@ -10,7 +10,7 @@ namespace ClaudeUsageMonitor;
 ///   GET https://api.anthropic.com/api/oauth/usage
 ///   Authorization: Bearer {accessToken}
 ///   anthropic-beta: oauth-2025-04-20
-///   User-Agent: claude-code/2.0.32
+///   User-Agent: claude-code/{installed version, read dynamically via ClaudeCodeInfo}
 /// </summary>
 public sealed class UsageFetcher : IDisposable
 {
@@ -33,7 +33,7 @@ public sealed class UsageFetcher : IDisposable
         var req = new HttpRequestMessage(HttpMethod.Get, "/api/oauth/usage");
         req.Headers.Add("Authorization", $"Bearer {accessToken}");
         req.Headers.Add("anthropic-beta", "oauth-2025-04-20");
-        req.Headers.Add("User-Agent", "claude-code/2.0.32");
+        req.Headers.Add("User-Agent", ClaudeCodeInfo.UserAgent);
 
         var resp = await _http.SendAsync(req, ct);
 
@@ -43,7 +43,9 @@ public sealed class UsageFetcher : IDisposable
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadAsStringAsync(ct);
+#if DEBUG
         System.Diagnostics.Debug.WriteLine($"[Usage] Response: {json}");
+#endif
 
         return Parse(json);
     }

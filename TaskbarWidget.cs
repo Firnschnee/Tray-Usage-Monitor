@@ -67,6 +67,17 @@ internal sealed class TaskbarWidget : IDisposable
         Redraw();
     }
 
+    /// <summary>
+    /// Called when the TaskbarCreated message is received (Explorer restarted).
+    /// Recreates the window and re-embeds it in the new taskbar.
+    /// </summary>
+    public void Reattach()
+    {
+        _nw.Reattach();
+        if (_nw.Embedded)
+            Redraw();
+    }
+
     public void Dispose()
     {
         _timer.Dispose();
@@ -393,6 +404,41 @@ internal sealed class TaskbarWidget : IDisposable
                 Win32Interop.DeleteObject(hBitmap);
                 Win32Interop.DeleteDC(hdcMem);
                 Win32Interop.ReleaseDC(IntPtr.Zero, hdcScreen);
+            }
+        }
+
+        /// <summary>
+        /// Re-embeds the widget after Explorer restarts (TaskbarCreated message).
+        /// The old child window was destroyed with Shell_TrayWnd, so we release the
+        /// stale handle reference and create a fresh window before re-embedding.
+        /// </summary>
+        public void Reattach()
+        {
+            Embedded = false;
+            if (Handle != IntPtr.Zero)
+                ReleaseHandle(); // don't call DestroyWindow on an already-destroyed handle
+
+            var cp = new CreateParams
+            {
+                Style   = unchecked((int)(Win32Interop.WS_POPUP | Win32Interop.WS_VISIBLE)),
+                ExStyle = unchecked((int)(Win32Interop.WS_EX_TOOLWINDOW
+                                        | Win32Interop.WS_EX_LAYERED
+                                        | Win32Interop.WS_EX_NOACTIVATE)),
+                Width   = _w,
+                Height  = _h,
+                X       = -2000,
+                Y       = -2000,
+                Caption = "",
+            };
+
+            try
+            {
+                CreateHandle(cp);
+                Embedded = TryEmbedInTaskbar();
+            }
+            catch
+            {
+                Embedded = false;
             }
         }
 
