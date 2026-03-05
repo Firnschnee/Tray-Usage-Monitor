@@ -1,6 +1,6 @@
 ## Claude Usage Monitor - Taskbar Widget + Popup Window 
 
-A Windows tray app that shows your Claude.ai usage at a glance - including a widget embedded directly in the taskbar.
+A Windows tray app that shows your Claude.ai usage at a glance - including a widget embedded directly in the taskbar. 
 
 <img width="699" height="47" alt="taskbar" src="https://github.com/user-attachments/assets/3312f88c-9564-4503-83cf-096a7a72ef35" />
 
@@ -38,6 +38,9 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 <img width="402" height="235" alt="Tray Usage Monitor" src="https://github.com/user-attachments/assets/0479ef8d-bcb8-445e-9b56-df71c411852c" />
 
 If taskbar embedding isn't available (unsupported shell, modified taskbar), the app falls back gracefully to tray icon + popup only.
+
+### Don't want the popup? 
+Either close it or - there is now a branch without the popup! 
 
 ## How it actually works (technically)
 
