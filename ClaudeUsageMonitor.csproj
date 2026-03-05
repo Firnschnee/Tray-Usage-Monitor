@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ClaudeUsageMonitor</AssemblyName>
     <RootNamespace>ClaudeUsageMonitor</RootNamespace>
-    <Version>0.4.4</Version>
+    <Version>0.4.5</Version>
     <Description>Claude.ai Usage Monitor - reads OAuth token from Claude Code</Description>
   </PropertyGroup>
 
