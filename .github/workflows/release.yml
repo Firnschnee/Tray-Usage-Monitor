@@ -27,7 +27,6 @@ jobs:
           -r win-x64
           --no-self-contained
           -p:PublishSingleFile=true
-          -p:EnableCompressionInSingleFile=true
           -o publish
 
       - name: Create GitHub Release
