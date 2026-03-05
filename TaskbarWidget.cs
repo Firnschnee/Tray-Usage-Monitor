@@ -78,6 +78,16 @@ internal sealed class TaskbarWidget : IDisposable
             Redraw();
     }
 
+    /// <summary>
+    /// Called on resume from standby. Re-runs position math so the widget
+    /// doesn't drift over the "show hidden icons" arrow after the taskbar relays out.
+    /// </summary>
+    public void Reposition()
+    {
+        if (_nw.RepositionInTaskbar())
+            Redraw();
+    }
+
     public void Dispose()
     {
         _timer.Dispose();
@@ -405,6 +415,31 @@ internal sealed class TaskbarWidget : IDisposable
                 Win32Interop.DeleteDC(hdcMem);
                 Win32Interop.ReleaseDC(IntPtr.Zero, hdcScreen);
             }
+        }
+
+        /// <summary>
+        /// Re-runs the position calculation and moves the window to match the
+        /// current taskbar layout. Used on resume from standby.
+        /// Returns true if the window was successfully repositioned.
+        /// </summary>
+        public bool RepositionInTaskbar()
+        {
+            if (Handle == IntPtr.Zero || !Embedded) return false;
+
+            var taskbar = Win32Interop.FindWindowW("Shell_TrayWnd", null);
+            if (taskbar == IntPtr.Zero) return false;
+
+            var trayNotify = Win32Interop.FindWindowExW(taskbar, IntPtr.Zero, "TrayNotifyWnd", null);
+            if (trayNotify == IntPtr.Zero) return false;
+
+            if (!Win32Interop.GetWindowRect(trayNotify, out var trayRect) ||
+                !Win32Interop.GetWindowRect(taskbar,    out var taskbarRect))
+                return false;
+
+            int x = trayRect.Left - taskbarRect.Left - _w;
+            int y = (taskbarRect.Height - _h) / 2;
+            Win32Interop.MoveWindow(Handle, x, y, _w, _h, true);
+            return true;
         }
 
         /// <summary>

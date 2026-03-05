@@ -30,6 +30,9 @@ public sealed class MainForm : Form
     private static readonly uint _taskbarCreatedMsg =
         Win32Interop.RegisterWindowMessage("TaskbarCreated");
 
+    private const int WM_POWERBROADCAST     = 0x0218;
+    private const int PBT_APMRESUMEAUTOMATIC = 0x0012;
+
     private static readonly Color COk = Color.FromArgb(34, 197, 94);
     private static readonly Color CWarn = Color.FromArgb(251, 191, 36);
     private static readonly Color CCrit = Color.FromArgb(239, 68, 68);
@@ -377,6 +380,9 @@ public sealed class MainForm : Form
         // Re-embed the taskbar widget whenever Explorer restarts
         if (_taskbarCreatedMsg != 0 && m.Msg == (int)_taskbarCreatedMsg)
             _taskbarWidget?.Reattach();
+        // Reposition after wake from standby (taskbar layout may have shifted)
+        if (m.Msg == WM_POWERBROADCAST && m.WParam.ToInt32() == PBT_APMRESUMEAUTOMATIC)
+            _taskbarWidget?.Reposition();
         base.WndProc(ref m);
     }
 
