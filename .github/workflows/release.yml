@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        run: >
+          dotnet publish ClaudeUsageMonitor.csproj
+          -c Release
+          -r win-x64
+          --no-self-contained
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -o publish
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ github.ref_name }}
+          generate_release_notes: true
+          files: publish/ClaudeUsageMonitor.exe
