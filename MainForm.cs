@@ -380,9 +380,14 @@ public sealed class MainForm : Form
         // Re-embed the taskbar widget whenever Explorer restarts
         if (_taskbarCreatedMsg != 0 && m.Msg == (int)_taskbarCreatedMsg)
             _taskbarWidget?.Reattach();
-        // Reposition after wake from standby (taskbar layout may have shifted)
+        // Reposition + re-poll after wake from standby (timer doesn't count sleep time)
         if (m.Msg == WM_POWERBROADCAST && m.WParam.ToInt32() == PBT_APMRESUMEAUTOMATIC)
+        {
             _taskbarWidget?.Reposition();
+            _backoffMs = PollIntervalMs;
+            _pollTimer.Interval = PollIntervalMs;
+            FireAndForget(PollAsync);
+        }
         base.WndProc(ref m);
     }
 
