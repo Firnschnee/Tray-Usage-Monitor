@@ -44,6 +44,12 @@ internal sealed class TaskbarWidget : IDisposable
 
     public bool IsEmbedded => _nw.Embedded;
 
+    public ContextMenuStrip? ContextMenu
+    {
+        get => _nw.ContextMenu;
+        set => _nw.ContextMenu = value;
+    }
+
     // ── Constructor ──────────────────────────────────────────────────────────
 
     public TaskbarWidget(UsageData? initialData = null)
@@ -278,8 +284,11 @@ internal sealed class TaskbarWidget : IDisposable
 
     private sealed class WidgetNativeWindow : NativeWindow, IDisposable
     {
+        private const int WM_RBUTTONUP = 0x0205;
+
         private readonly int _w, _h;
         public bool Embedded { get; private set; }
+        public ContextMenuStrip? ContextMenu { get; set; }
 
         public WidgetNativeWindow(int w, int h)
         {
@@ -475,6 +484,22 @@ internal sealed class TaskbarWidget : IDisposable
             {
                 Embedded = false;
             }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_RBUTTONUP && ContextMenu != null)
+            {
+                var lp = m.LParam.ToInt32();
+                var pt = new Win32Interop.POINT
+                {
+                    X = (short)(lp & 0xFFFF),
+                    Y = (short)((lp >> 16) & 0xFFFF),
+                };
+                Win32Interop.ClientToScreen(Handle, ref pt);
+                ContextMenu.Show(pt.X, pt.Y);
+            }
+            base.WndProc(ref m);
         }
 
         public void Dispose()

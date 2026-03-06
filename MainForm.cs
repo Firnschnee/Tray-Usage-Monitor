@@ -77,6 +77,7 @@ public sealed class MainForm : Form
             await PollAsync();
             _pollTimer.Start();
             _taskbarWidget = new TaskbarWidget(_lastData);
+            _taskbarWidget.ContextMenu = _trayIcon.ContextMenuStrip;
             ShowDetails();
         });
         startup.Start();
@@ -384,6 +385,17 @@ public sealed class MainForm : Form
         if (m.Msg == WM_POWERBROADCAST && m.WParam.ToInt32() == PBT_APMRESUMEAUTOMATIC)
         {
             _taskbarWidget?.Reposition();
+            // The taskbar may not have finished re-laying out at this point.
+            // Schedule a second reposition after 2 s so the widget doesn't
+            // sit on top of the "show hidden icons" chevron once the taskbar settles.
+            var retryTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+            retryTimer.Tick += (_, _) =>
+            {
+                retryTimer.Stop();
+                retryTimer.Dispose();
+                _taskbarWidget?.Reposition();
+            };
+            retryTimer.Start();
             _backoffMs = PollIntervalMs;
             _pollTimer.Interval = PollIntervalMs;
             FireAndForget(PollAsync);
