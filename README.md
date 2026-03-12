@@ -39,9 +39,6 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 
 If taskbar embedding isn't available (unsupported shell, modified taskbar), the app falls back gracefully to tray icon + popup only.
 
-### Don't want the popup? 
-Either close it or - there is now a branch without the popup! 
-
 ## How it actually works (technically)
 
 1. Reads `"Claude Code-credentials"` from Windows Credential Manager, then falls back to `%USERPROFILE%\.claude\.credentials.json` (and `%HOMEDRIVE%%HOMEPATH%\.claude\` as a second fallback)
