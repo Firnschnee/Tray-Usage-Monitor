@@ -26,8 +26,13 @@ internal static partial class ClaudeCodeInfo
                 CreateNoWindow = true,
             };
             using var proc = Process.Start(psi)!;
-            var output = proc.StandardOutput.ReadToEnd().Trim();
-            proc.WaitForExit(3000);
+            var readTask = proc.StandardOutput.ReadToEndAsync();
+            if (!proc.WaitForExit(3000))
+            {
+                try { proc.Kill(); } catch { }
+                return "2.1.69";
+            }
+            var output = readTask.Result.Trim();
             var match = VersionRegex().Match(output);
             if (match.Success) return match.Value;
         }

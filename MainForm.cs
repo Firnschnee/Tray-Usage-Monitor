@@ -299,7 +299,12 @@ public sealed class MainForm : Form
         if (_widget == null || _widget.IsDisposed || _lastData == null) return;
 
         _widget.SuspendLayout();
-        _widget.Controls.Clear();
+        while (_widget.Controls.Count > 0)
+        {
+            var c = _widget.Controls[0];
+            _widget.Controls.RemoveAt(0);
+            c.Dispose();
+        }
 
         var d = _lastData;
         var updated = $" · {d.FetchedAt:HH:mm:ss}";
