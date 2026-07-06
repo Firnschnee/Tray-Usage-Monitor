@@ -57,7 +57,7 @@ public sealed class UsageFetcher : IDisposable
         var data = new UsageData { FetchedAt = DateTime.Now };
 
         // five_hour
-        if (root.TryGetProperty("five_hour", out var fh))
+        if (root.TryGetProperty("five_hour", out var fh) && fh.ValueKind == JsonValueKind.Object)
         {
             if (fh.TryGetProperty("utilization", out var u) && u.ValueKind == JsonValueKind.Number) data.SessionPercent = u.GetDouble();
             if (fh.TryGetProperty("resets_at", out var r) && r.ValueKind == JsonValueKind.String)
@@ -66,7 +66,7 @@ public sealed class UsageFetcher : IDisposable
         }
 
         // seven_day
-        if (root.TryGetProperty("seven_day", out var sd))
+        if (root.TryGetProperty("seven_day", out var sd) && sd.ValueKind == JsonValueKind.Object)
         {
             data.HasWeekly = true;
             if (sd.TryGetProperty("utilization", out var u) && u.ValueKind == JsonValueKind.Number) data.WeeklyPercent = u.GetDouble();
@@ -76,7 +76,7 @@ public sealed class UsageFetcher : IDisposable
         }
 
         // seven_day_opus (Opus weekly cap, same shape as seven_day)
-        if (root.TryGetProperty("seven_day_opus", out var sdo))
+        if (root.TryGetProperty("seven_day_opus", out var sdo) && sdo.ValueKind == JsonValueKind.Object)
         {
             data.HasOpus = true;
             if (sdo.TryGetProperty("utilization", out var uo) && uo.ValueKind == JsonValueKind.Number) data.OpusPercent = uo.GetDouble();
@@ -86,7 +86,7 @@ public sealed class UsageFetcher : IDisposable
         }
 
         // extra_usage (Pay-as-you-go)
-        if (root.TryGetProperty("extra_usage", out var ex))
+        if (root.TryGetProperty("extra_usage", out var ex) && ex.ValueKind == JsonValueKind.Object)
         {
             if (ex.TryGetProperty("is_enabled", out var en) && en.ValueKind != JsonValueKind.Null) data.ExtraEnabled = en.GetBoolean();
             if (ex.TryGetProperty("utilization", out var u) && u.ValueKind == JsonValueKind.Number) data.ExtraPercent = u.GetDouble();
