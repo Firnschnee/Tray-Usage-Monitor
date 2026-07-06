@@ -12,6 +12,16 @@
     <Description>Claude.ai Usage Monitor - reads OAuth token from Claude Code</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ClaudeUsageMonitor.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests\**" />
+    <Compile Remove="obj\**" />
+    <Compile Remove="bin\**" />
+  </ItemGroup>
+
   <!-- Keine externen Dependencies. Null. Nada. -->
 
 </Project>
