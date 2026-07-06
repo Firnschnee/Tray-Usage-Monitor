@@ -50,7 +50,7 @@ public sealed class UsageFetcher : IDisposable
         return Parse(json);
     }
 
-    private static UsageData Parse(string json)
+    internal static UsageData Parse(string json)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -73,6 +73,16 @@ public sealed class UsageFetcher : IDisposable
             if (sd.TryGetProperty("resets_at", out var r) && r.ValueKind == JsonValueKind.String)
                 if (DateTime.TryParse(r.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
                     data.WeeklyResetsAt = dt.ToUniversalTime();
+        }
+
+        // seven_day_opus (Opus weekly cap, same shape as seven_day)
+        if (root.TryGetProperty("seven_day_opus", out var sdo))
+        {
+            data.HasOpus = true;
+            if (sdo.TryGetProperty("utilization", out var uo) && uo.ValueKind == JsonValueKind.Number) data.OpusPercent = uo.GetDouble();
+            if (sdo.TryGetProperty("resets_at", out var ro) && ro.ValueKind == JsonValueKind.String)
+                if (DateTime.TryParse(ro.GetString(), null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+                    data.OpusResetsAt = dt.ToUniversalTime();
         }
 
         // extra_usage (Pay-as-you-go)

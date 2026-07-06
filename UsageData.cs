@@ -19,6 +19,11 @@ public sealed class UsageData
     public DateTime? WeeklyResetsAt { get; set; }
     public bool HasWeekly { get; set; }
 
+    // Opus weekly window (seven_day_opus) — present on Max/Pro plans with an Opus cap
+    public bool HasOpus { get; set; }
+    public double OpusPercent { get; set; }
+    public DateTime? OpusResetsAt { get; set; }
+
     // Extra Usage (Pay-as-you-go Overage)
     public bool ExtraEnabled { get; set; }
     public double ExtraPercent { get; set; }
@@ -34,6 +39,13 @@ public sealed class UsageData
 
     public string SessionResetText => FormatSpan(SessionResetIn);
     public string WeeklyResetText => FormatSpan(WeeklyResetIn);
+
+    public TimeSpan OpusResetIn => TimeUntil(OpusResetsAt);
+    public string OpusResetText => FormatSpan(OpusResetIn);
+
+    // Window start times (UTC) — used by the forecast to ignore pre-reset samples
+    public DateTime? SessionWindowStartUtc => SessionResetsAt?.Subtract(SessionWindow);
+    public DateTime? WeeklyWindowStartUtc => WeeklyResetsAt?.Subtract(WeeklyWindow);
 
     // Pacing: linear expected usage based on elapsed time in the window
     private static readonly TimeSpan SessionWindow = TimeSpan.FromHours(5);
