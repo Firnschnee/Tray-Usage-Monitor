@@ -41,6 +41,9 @@ public sealed class JsonlUsageReaderTests : IDisposable
         Assert.False(JsonlUsageReader.TryParseLine(
             Line("msg_x", "<synthetic>", "2026-07-06T10:00:00.000Z"), out _));
         Assert.False(JsonlUsageReader.TryParseLine("not json", out _));
+        Assert.False(JsonlUsageReader.TryParseLine("42", out _));
+        Assert.False(JsonlUsageReader.TryParseLine("[1,2,3]", out _));
+        Assert.False(JsonlUsageReader.TryParseLine("null", out _));
     }
 
     [Fact]

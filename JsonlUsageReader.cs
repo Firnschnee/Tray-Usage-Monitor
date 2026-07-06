@@ -103,6 +103,7 @@ public static class JsonlUsageReader
         {
             using var doc = JsonDocument.Parse(line);
             var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return false;
             if (!root.TryGetProperty("type", out var t) || t.GetString() != "assistant") return false;
             if (!root.TryGetProperty("message", out var msg)) return false;
             if (!msg.TryGetProperty("usage", out var usage)) return false;
