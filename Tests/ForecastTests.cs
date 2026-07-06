@@ -78,4 +78,31 @@ public class ForecastTests
         Assert.NotNull(f);
         Assert.InRange(f!.PercentPerHour, 8, 12); // 1% per 6 min = 10%/h, not distorted by the 95s
     }
+
+    [Fact]
+    public void SentinelSamplesAreIgnored()
+    {
+        // Rising 10%/h with -1 sentinel samples interleaved (window not reported on some polls)
+        var samples = new List<UsageSample>();
+        for (int i = 0; i <= 10; i++)
+        {
+            var t = Now.AddMinutes(-60 + i * 6);
+            samples.Add(new UsageSample(t, 0, i % 3 == 0 ? -1 : 50 + 10 * (i * 6 / 60.0), -1));
+        }
+        var f = UsageHistory.Forecast(samples, s => s.WeeklyPercent,
+            Now.AddHours(-2), Now.AddHours(6), Now, TimeSpan.FromHours(1));
+        Assert.NotNull(f);
+        Assert.InRange(f!.PercentPerHour, 9, 11);
+    }
+
+    [Fact]
+    public void IdenticalTimestampsReturnNull()
+    {
+        var t = Now.AddMinutes(-30);
+        var samples = Enumerable.Range(0, 5)
+            .Select(i => new UsageSample(t, 10 + i, 0, -1)).ToList();
+        var f = UsageHistory.Forecast(samples, s => s.SessionPercent,
+            Now.AddHours(-2), Now.AddHours(5), Now, TimeSpan.FromHours(1));
+        Assert.Null(f);
+    }
 }

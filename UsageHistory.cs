@@ -68,7 +68,7 @@ public sealed class UsageHistory
         var cutoff = nowUtc - lookback;
         if (windowStartUtc > cutoff) cutoff = windowStartUtc;
 
-        var pts = samples.Where(s => s.TimestampUtc >= cutoff && s.TimestampUtc <= nowUtc)
+        var pts = samples.Where(s => s.TimestampUtc >= cutoff && s.TimestampUtc <= nowUtc && percent(s) >= 0)
                          .OrderBy(s => s.TimestampUtc)
                          .ToList();
         if (pts.Count < 3) return null;

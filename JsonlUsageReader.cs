@@ -19,8 +19,8 @@ public sealed record ModelUsage(string Model, long InputTokens, long OutputToken
 
     // Prices per million tokens: (input, output, cache write, cache read)
     private static (decimal In, decimal Out, decimal Write, decimal Read) Prices(string model) =>
-        model.Contains("haiku")  ? (1m, 5m, 1.25m, 0.10m) :
-        model.Contains("sonnet") ? (3m, 15m, 3.75m, 0.30m) :
+        model.Contains("haiku", StringComparison.OrdinalIgnoreCase)  ? (1m, 5m, 1.25m, 0.10m) :
+        model.Contains("sonnet", StringComparison.OrdinalIgnoreCase) ? (3m, 15m, 3.75m, 0.30m) :
         (15m, 75m, 18.75m, 1.50m); // opus tier; also the fallback for unknown flagship models
 }
 

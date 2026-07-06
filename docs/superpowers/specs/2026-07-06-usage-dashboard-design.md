@@ -55,6 +55,7 @@ notifications, menu, popup; old details window removed), `TaskbarWidget.cs`
 - Else `limitAt = now + (100 − current)/slope`; shown only if before `resets_at`,
   otherwise "ok until reset".
 - Deliberately linear extrapolation; anything fancier would fake precision.
+- Samples carrying the -1 "window not reported" sentinel are excluded from the fit.
 
 ## Popup layout (top to bottom)
 

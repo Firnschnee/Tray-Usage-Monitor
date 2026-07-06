@@ -65,8 +65,12 @@ public sealed class AppSettings
 
     public static void SetAutostart(bool enabled)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath);
-        if (enabled) key.SetValue(RunValueName, $"\"{Application.ExecutablePath}\"");
-        else key.DeleteValue(RunValueName, false);
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath);
+            if (enabled) key.SetValue(RunValueName, $"\"{Application.ExecutablePath}\"");
+            else key.DeleteValue(RunValueName, false);
+        }
+        catch { /* registry write failed, autostart state unchanged */ }
     }
 }
