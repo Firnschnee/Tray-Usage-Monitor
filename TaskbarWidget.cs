@@ -50,6 +50,12 @@ internal sealed class TaskbarWidget : IDisposable
         set => _nw.ContextMenu = value;
     }
 
+    public Action? OnLeftClick
+    {
+        get => _nw.OnLeftClick;
+        set => _nw.OnLeftClick = value;
+    }
+
     // ── Constructor ──────────────────────────────────────────────────────────
 
     public TaskbarWidget(UsageData? initialData = null)
@@ -285,10 +291,12 @@ internal sealed class TaskbarWidget : IDisposable
     private sealed class WidgetNativeWindow : NativeWindow, IDisposable
     {
         private const int WM_RBUTTONUP = 0x0205;
+        private const int WM_LBUTTONUP = 0x0202;
 
         private readonly int _w, _h;
         public bool Embedded { get; private set; }
         public ContextMenuStrip? ContextMenu { get; set; }
+        public Action? OnLeftClick { get; set; }
 
         public WidgetNativeWindow(int w, int h)
         {
@@ -488,6 +496,9 @@ internal sealed class TaskbarWidget : IDisposable
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_LBUTTONUP)
+                OnLeftClick?.Invoke();
+
             if (m.Msg == WM_RBUTTONUP && ContextMenu != null)
             {
                 var lp = m.LParam.ToInt32();
