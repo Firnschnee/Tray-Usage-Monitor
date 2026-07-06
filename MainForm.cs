@@ -12,18 +12,26 @@ public sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _pollTimer;
     private readonly UsageFetcher _fetcher;
 
-    private const int PollIntervalMs = 120_000;  // 2 min base
-    private const int MaxBackoffMs   = 960_000;  // 16 min cap
+    private const int MaxBackoffMs = 960_000;  // 16 min cap
+    private int PollIntervalMs => _settings.PollIntervalMinutes * 60_000;
 
     private readonly SemaphoreSlim _pollGuard = new(1, 1);
     private UsageData? _lastData;
     private int _errors;
-    private int _backoffMs = PollIntervalMs;
+    private int _backoffMs;
     private bool _tokenWarningShown;
     private IntPtr _trayIconHandle = IntPtr.Zero;
     private readonly CancellationTokenSource _cts = new();
 
-    private Form? _widget;
+    private readonly AppSettings _settings;
+    private readonly UsageHistory _history;
+    private PopupForm? _popup;
+    private DateTime _popupClosedAtUtc;
+
+    // Notification state: once per threshold per window instance
+    private DateTime? _sessNotifyWindow; private int _sessNotifiedLevel;
+    private DateTime? _weekNotifyWindow; private int _weekNotifiedLevel;
+
     private TaskbarWidget? _taskbarWidget;
 
     // Registered once per process; non-zero on success (range 0xC000–0xFFFF)
@@ -37,11 +45,6 @@ public sealed class MainForm : Form
     private static readonly Color CWarn = Color.FromArgb(251, 191, 36);
     private static readonly Color CCrit = Color.FromArgb(239, 68, 68);
     private static readonly Color CGray = Color.FromArgb(156, 163, 175);
-    private static readonly Color CWeekly = Color.FromArgb(56, 189, 248); // cyan — weekly reference on session bar
-
-    // over-pace = red (burning quota fast), under-pace = green (headroom), on-pace = yellow
-    private static Color PaceColor(double diff) =>
-        diff >= 5 ? CCrit : diff <= -5 ? COk : CWarn;
 
     public MainForm()
     {
@@ -50,6 +53,10 @@ public sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.None;
         Opacity = 0;
         Size = Size.Empty;
+
+        _settings = AppSettings.Load();
+        _history = new UsageHistory(Path.Combine(AppSettings.SettingsDir, "history.json"));
+        _backoffMs = PollIntervalMs;
 
         _fetcher = new UsageFetcher();
 
@@ -62,9 +69,9 @@ public sealed class MainForm : Form
             ContextMenuStrip = BuildMenu(),
             Visible = true,
         };
-        _trayIcon.DoubleClick += (_, _) => ShowDetails();
+        _trayIcon.MouseUp += (_, e) => { if (e.Button == MouseButtons.Left) TogglePopup(); };
 
-        _pollTimer = new System.Windows.Forms.Timer { Interval = 120_000 }; // 2 min
+        _pollTimer = new System.Windows.Forms.Timer { Interval = PollIntervalMs };
         _pollTimer.Tick += (_, _) => FireAndForget(PollAsync);
 
         // Load event won't fire because SetVisibleCore(false) prevents visibility.
@@ -78,7 +85,7 @@ public sealed class MainForm : Form
             _pollTimer.Start();
             _taskbarWidget = new TaskbarWidget(_lastData);
             _taskbarWidget.ContextMenu = _trayIcon.ContextMenuStrip;
-            ShowDetails();
+            _taskbarWidget.OnLeftClick = TogglePopup;
         });
         startup.Start();
     }
@@ -120,11 +127,20 @@ public sealed class MainForm : Form
             _backoffMs = PollIntervalMs;
             _pollTimer.Interval = PollIntervalMs;
 
+            _history.Add(new UsageSample(DateTime.UtcNow, data.SessionPercent,
+                data.HasWeekly ? data.WeeklyPercent : -1,
+                data.HasOpus ? data.OpusPercent : -1));
+            CheckNotifications(data);
+
             var pct = data.SessionPercent;
-            var color = pct >= 90 ? CCrit : pct >= 75 ? CWarn : COk;
-            SetIcon($"{pct:0}%", color, data.TooltipText);
-            RefreshWidget();
+            var color = pct >= _settings.CritThresholdPercent ? CCrit
+                      : pct >= _settings.WarnThresholdPercent ? CWarn : COk;
+            var tooltip = data.TooltipText;
+            var forecast = SessionForecast(data);
+            if (forecast != null) tooltip += $"\nPace: {forecast.ToDisplayText()}";
+            SetIcon($"{pct:0}%", color, tooltip);
             _taskbarWidget?.Update(data);
+            _popup?.UpdateData(data);
         }
         catch (OperationCanceledException) { }
         catch (UnauthorizedAccessException)
@@ -158,7 +174,7 @@ public sealed class MainForm : Form
         var m = new ContextMenuStrip();
 
         var show = new ToolStripMenuItem("Details") { Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) };
-        show.Click += (_, _) => ShowDetails();
+        show.Click += (_, _) => TogglePopup();
         m.Items.Add(show);
 
         m.Items.Add(new ToolStripSeparator());
@@ -177,6 +193,31 @@ public sealed class MainForm : Form
 
         m.Items.Add(new ToolStripSeparator());
 
+        var interval = new ToolStripMenuItem("Poll interval");
+        foreach (var min in new[] { 1, 2, 5, 15 })
+        {
+            var item = new ToolStripMenuItem($"{min} min") { Checked = _settings.PollIntervalMinutes == min, Tag = min };
+            item.Click += (sender, _) =>
+            {
+                _settings.PollIntervalMinutes = (int)((ToolStripMenuItem)sender!).Tag!;
+                _settings.Save();
+                _backoffMs = PollIntervalMs;
+                _pollTimer.Interval = PollIntervalMs;
+                foreach (ToolStripMenuItem it in interval.DropDownItems)
+                    it.Checked = (int)it.Tag! == _settings.PollIntervalMinutes;
+            };
+            interval.DropDownItems.Add(item);
+        }
+        m.Items.Add(interval);
+
+        var notify = new ToolStripMenuItem("Notifications") { Checked = _settings.NotificationsEnabled, CheckOnClick = true };
+        notify.CheckedChanged += (_, _) => { _settings.NotificationsEnabled = notify.Checked; _settings.Save(); };
+        m.Items.Add(notify);
+
+        var autostart = new ToolStripMenuItem("Start with Windows") { Checked = AppSettings.IsAutostartEnabled(), CheckOnClick = true };
+        autostart.CheckedChanged += (_, _) => AppSettings.SetAutostart(autostart.Checked);
+        m.Items.Add(autostart);
+
         m.Items.Add(new ToolStripSeparator());
 
         var about = new ToolStripMenuItem("About");
@@ -193,50 +234,53 @@ public sealed class MainForm : Form
     }
 
     // ═══════════════════════════════════════
-    // WIDGET
+    // POPUP
     // ═══════════════════════════════════════
 
-    private void ShowDetails()
+    private void TogglePopup()
     {
-        if (_widget != null && !_widget.IsDisposed)
-        {
-            _widget.Activate();
-            _ = PollAsync();
-            return;
-        }
+        if (_popup != null && !_popup.IsDisposed) { _popup.Close(); _popup = null; return; }
+        // Clicking the tray while the popup is open fires Deactivate (popup closes)
+        // before MouseUp arrives, without this guard the click would reopen it.
+        if ((DateTime.UtcNow - _popupClosedAtUtc).TotalMilliseconds < 300) return;
+        if (_lastData == null) return;
 
-        _widget = new Form
-        {
-            Text = "Claude Usage",
-            FormBorderStyle = FormBorderStyle.FixedToolWindow,
-            MaximizeBox = false, MinimizeBox = false,
-            BackColor = Color.FromArgb(24, 24, 27), ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10f), TopMost = true,
-            ShowInTaskbar = false,
-            ClientSize = new Size(400, 60),
-        };
+        _popup = new PopupForm(_lastData, _history);
+        _popup.FormClosed += (_, _) => { _popupClosedAtUtc = DateTime.UtcNow; _popup = null; };
+        _popup.Show();
+        _popup.Activate();
+    }
 
-        // Position near system tray (bottom-right)
-        var screen = Screen.PrimaryScreen!.WorkingArea;
-        _widget.StartPosition = FormStartPosition.Manual;
-        _widget.Location = new Point(screen.Right - 430, screen.Bottom - 120);
+    private ForecastResult? SessionForecast(UsageData d) =>
+        d.SessionWindowStartUtc is DateTime ws
+            ? UsageHistory.Forecast(_history.Samples, s => s.SessionPercent, ws,
+                d.SessionResetsAt, DateTime.UtcNow, TimeSpan.FromHours(1))
+            : null;
 
-        _widget.FormClosed += (_, _) => _widget = null;
+    // ═══════════════════════════════════════
+    // NOTIFICATIONS
+    // ═══════════════════════════════════════
 
-        if (_lastData != null)
-            RefreshWidget();
-        else
-            _widget.Controls.Add(new Label
-            {
-                Text = "Loading...",
-                Location = new Point(20, 15), Size = new Size(370, 22),
-                ForeColor = CGray, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
-            });
+    private void CheckNotifications(UsageData d)
+    {
+        if (!_settings.NotificationsEnabled) return;
+        CheckWindow(ref _sessNotifyWindow, ref _sessNotifiedLevel, d.SessionResetsAt, d.SessionPercent, "Session (5h)");
+        if (d.HasWeekly)
+            CheckWindow(ref _weekNotifyWindow, ref _weekNotifiedLevel, d.WeeklyResetsAt, d.WeeklyPercent, "Weekly (7d)");
+    }
 
-        _widget.Show();
+    private void CheckWindow(ref DateTime? window, ref int notifiedLevel,
+        DateTime? resetsAt, double pct, string label)
+    {
+        if (resetsAt != window) { window = resetsAt; notifiedLevel = 0; }
 
-        if (_lastData == null)
-            _ = PollAsync();
+        int level = pct >= _settings.CritThresholdPercent ? 2
+                  : pct >= _settings.WarnThresholdPercent ? 1 : 0;
+        if (level <= notifiedLevel) return;
+
+        notifiedLevel = level;
+        _trayIcon.ShowBalloonTip(6000, "Claude Usage Monitor",
+            $"{label}: {pct:0}% used", level == 2 ? ToolTipIcon.Warning : ToolTipIcon.Info);
     }
 
     private static void ShowAbout()
@@ -292,89 +336,6 @@ public sealed class MainForm : Form
         dlg.Controls.Add(link);
 
         dlg.ShowDialog();
-    }
-
-    private void RefreshWidget()
-    {
-        if (_widget == null || _widget.IsDisposed || _lastData == null) return;
-
-        _widget.SuspendLayout();
-        while (_widget.Controls.Count > 0)
-        {
-            var c = _widget.Controls[0];
-            _widget.Controls.RemoveAt(0);
-            c.Dispose();
-        }
-
-        var d = _lastData;
-        var updated = $" · {d.FetchedAt:HH:mm:ss}";
-
-        int y = 15;
-        // Session bar: colored session-pace marker + cyan weekly-reference marker (when available)
-        var sessionSub = $"Reset: {d.SessionResetText} | {d.SessionPaceText}";
-        if (d.HasWeekly)
-            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent, sessionSub,
-                (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)),
-                (d.WeeklyExpectedPercent, CWeekly));
-        else
-            AddBar(_widget, ref y, "Session (5h)", d.SessionPercent, sessionSub + updated,
-                (d.SessionExpectedPercent, PaceColor(d.SessionPaceDiff)));
-
-        // Weekly bar: colored marker + pace status + updated time in subtitle
-        if (d.HasWeekly)
-        {
-            var paceStatus = d.WeeklyPaceDiff >= 5 ? "ahead" : d.WeeklyPaceDiff <= -5 ? "under" : "on pace";
-            var weeklySub = $"Reset: {d.WeeklyResetText} | {d.WeeklyPaceDiff:+0.0;-0.0;0.0}% {paceStatus}";
-            AddBar(_widget, ref y, "Weekly (7d)", d.WeeklyPercent, weeklySub + updated,
-                (d.WeeklyExpectedPercent, PaceColor(d.WeeklyPaceDiff)));
-        }
-
-        if (d.ExtraEnabled) AddBar(_widget, ref y, "Extra Usage", d.ExtraPercent,
-            $"${d.ExtraUsedDollars:F2} / ${d.ExtraLimitDollars:F2}" + updated);
-
-        // Size the widget exactly to content with a small bottom margin
-        _widget.ClientSize = new Size(400, y + 8);
-
-        _widget.ResumeLayout();
-    }
-
-    private static void AddBar(Form f, ref int y, string label, double pct, string sub,
-        params (double Pct, Color Clr)[] markers)
-    {
-        var color = pct >= 90 ? CCrit : pct >= 75 ? CWarn : COk;
-
-        f.Controls.Add(new Label
-        {
-            Text = $"{label}: {pct:0.0}%",
-            Location = new Point(20, y), Size = new Size(370, 22),
-            ForeColor = color, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
-        });
-        y += 24;
-
-        var bar = new Panel { Location = new Point(20, y), Size = new Size(370, 14), BackColor = Color.FromArgb(45, 45, 50) };
-        bar.Paint += (_, e) =>
-        {
-            var w = (int)(bar.Width * Math.Min(pct, 100) / 100);
-            if (w > 0) { using var b = new SolidBrush(color); e.Graphics.FillRectangle(b, 0, 0, w, bar.Height); }
-
-            // Draw each pace marker as a colored vertical line
-            foreach (var (mPct, mClr) in markers)
-            {
-                if (mPct < 0) continue;
-                var mx = (int)(bar.Width * Math.Min(mPct, 100) / 100);
-                using var pen = new Pen(Color.FromArgb(210, mClr), 2);
-                e.Graphics.DrawLine(pen, mx, 0, mx, bar.Height);
-            }
-        };
-        f.Controls.Add(bar);
-        y += 18;
-
-        f.Controls.Add(new Label
-        {
-            Text = sub, Location = new Point(20, y), Size = new Size(370, 18),
-            ForeColor = Color.FromArgb(140, 140, 150), Font = new Font("Segoe UI", 8.5f),
-        });
-        y += 18;
     }
 
     // ═══════════════════════════════════════
@@ -481,7 +442,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _cts.Cancel(); _cts.Dispose(); _pollGuard.Dispose(); _widget?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
+        if (disposing) { _cts.Cancel(); _cts.Dispose(); _pollGuard.Dispose(); _popup?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
         base.Dispose(disposing);
     }
 }
