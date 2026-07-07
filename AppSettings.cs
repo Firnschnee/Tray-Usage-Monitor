@@ -14,6 +14,13 @@ public sealed class AppSettings
     public int WarnThresholdPercent { get; set; } = 75;
     public int CritThresholdPercent { get; set; } = 90;
 
+    // How far left of the tray the taskbar widget sits, in pixels (0 = flush against tray).
+    // Set by dragging the widget's grip handle.
+    public int WidgetOffsetX { get; set; }
+
+    // Accent color for the "normal" (below-warn) state of the bars and tray icon.
+    public AccentColor Accent { get; set; } = AccentColor.Green;
+
     // Settable so tests can redirect persistence to a temp dir.
     public static string SettingsDir { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudeUsageMonitor");
@@ -49,6 +56,8 @@ public sealed class AppSettings
         if (s.PollIntervalMinutes is not (1 or 2 or 5 or 15)) s.PollIntervalMinutes = 2;
         s.WarnThresholdPercent = Math.Clamp(s.WarnThresholdPercent, 1, 99);
         s.CritThresholdPercent = Math.Clamp(s.CritThresholdPercent, s.WarnThresholdPercent, 100);
+        if (s.WidgetOffsetX < 0) s.WidgetOffsetX = 0;
+        if (!Enum.IsDefined(s.Accent)) s.Accent = AccentColor.Green;
         return s;
     }
 

@@ -14,6 +14,7 @@ internal static class Win32Interop
     public const uint WS_EX_TOOLWINDOW = 0x00000080;
     public const uint WS_EX_LAYERED    = 0x00080000;
     public const uint WS_EX_NOACTIVATE = 0x08000000;
+    public const uint WS_EX_TOPMOST    = 0x00000008;
 
     // ── UpdateLayeredWindow flags ───────────────────────────────────────────
     public const uint ULW_ALPHA     = 0x00000002;
@@ -121,6 +122,15 @@ internal static class Win32Interop
 
     [DllImport("user32.dll")]
     public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetCapture(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ReleaseCapture();
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern uint RegisterWindowMessage(string lpString);

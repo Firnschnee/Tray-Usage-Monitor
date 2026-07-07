@@ -32,7 +32,7 @@ public sealed class MainForm : Form
     private DateTime? _sessNotifyWindow; private int _sessNotifiedLevel;
     private DateTime? _weekNotifyWindow; private int _weekNotifiedLevel;
 
-    private TaskbarWidget? _taskbarWidget;
+    private TaskbarWidget? _widget;
 
     // Registered once per process; non-zero on success (range 0xC000–0xFFFF)
     private static readonly uint _taskbarCreatedMsg =
@@ -41,7 +41,6 @@ public sealed class MainForm : Form
     private const int WM_POWERBROADCAST     = 0x0218;
     private const int PBT_APMRESUMEAUTOMATIC = 0x0012;
 
-    private static readonly Color COk = Color.FromArgb(34, 197, 94);
     private static readonly Color CWarn = Color.FromArgb(251, 191, 36);
     private static readonly Color CCrit = Color.FromArgb(239, 68, 68);
     private static readonly Color CGray = Color.FromArgb(156, 163, 175);
@@ -83,9 +82,9 @@ public sealed class MainForm : Form
             startup.Dispose();
             await PollAsync();
             _pollTimer.Start();
-            _taskbarWidget = new TaskbarWidget(_lastData);
-            _taskbarWidget.ContextMenu = _trayIcon.ContextMenuStrip;
-            _taskbarWidget.OnLeftClick = TogglePopup;
+            _widget = new TaskbarWidget(_settings, _lastData);
+            _widget.ContextMenu = _trayIcon.ContextMenuStrip;
+            _widget.OnLeftClick = TogglePopup;
         });
         startup.Start();
     }
@@ -133,13 +132,12 @@ public sealed class MainForm : Form
             CheckNotifications(data);
 
             var pct = data.SessionPercent;
-            var color = pct >= _settings.CritThresholdPercent ? CCrit
-                      : pct >= _settings.WarnThresholdPercent ? CWarn : COk;
+            var color = IconColor(pct);
             var tooltip = data.TooltipText;
             var forecast = SessionForecast(data);
             if (forecast != null) tooltip += $"\nPace: {forecast.ToDisplayText()}";
-            SetIcon($"{pct:0}%", color, tooltip);
-            _taskbarWidget?.Update(data);
+            SetIcon($"{pct:0}", color, tooltip);
+            _widget?.Update(data);
             _popup?.UpdateData(data);
         }
         catch (OperationCanceledException) { }
@@ -210,6 +208,22 @@ public sealed class MainForm : Form
         }
         m.Items.Add(interval);
 
+        var accent = new ToolStripMenuItem("Accent color");
+        foreach (var a in new[] { AccentColor.Green, AccentColor.Amber })
+        {
+            var item = new ToolStripMenuItem(a.ToString()) { Checked = _settings.Accent == a, Tag = a };
+            item.Click += (sender, _) =>
+            {
+                _settings.Accent = (AccentColor)((ToolStripMenuItem)sender!).Tag!;
+                _settings.Save();
+                ApplyAccent();
+                foreach (ToolStripMenuItem it in accent.DropDownItems)
+                    it.Checked = (AccentColor)it.Tag! == _settings.Accent;
+            };
+            accent.DropDownItems.Add(item);
+        }
+        m.Items.Add(accent);
+
         var notify = new ToolStripMenuItem("Notifications") { Checked = _settings.NotificationsEnabled, CheckOnClick = true };
         notify.CheckedChanged += (_, _) => { _settings.NotificationsEnabled = notify.Checked; _settings.Save(); };
         m.Items.Add(notify);
@@ -249,6 +263,20 @@ public sealed class MainForm : Form
         _popup.FormClosed += (_, _) => { _popupClosedAtUtc = DateTime.UtcNow; _popup = null; };
         _popup.Show();
         _popup.Activate();
+    }
+
+    // Tray-icon color: warn/crit thresholds override the chosen accent for the OK state.
+    private Color IconColor(double pct) =>
+        pct >= _settings.CritThresholdPercent ? CCrit
+      : pct >= _settings.WarnThresholdPercent ? CWarn
+      : AccentPalette.Ok(_settings.Accent);
+
+    private void ApplyAccent()
+    {
+        if (_lastData == null) return;
+        var pct = _lastData.SessionPercent;
+        SetIcon($"{pct:0}", IconColor(pct), _trayIcon.Text);
+        _widget?.Update(_lastData);
     }
 
     private ForecastResult? SessionForecast(UsageData d) =>
@@ -379,7 +407,16 @@ public sealed class MainForm : Form
         rr.CloseFigure();
         g.FillPath(bg, rr);
 
-        using var font = new Font("Segoe UI", text.Length > 3 ? 7f : 9f, FontStyle.Bold);
+        // Numeric usage text is now 1-3 chars ("0".."100") — size up to fill the icon.
+        // Longer status strings ("AUTH", "ERR", "...") stay small enough to fit.
+        float fontSize = text.Length switch
+        {
+            <= 1 => 17f,   // "5", "!"
+            2    => 14f,   // "42"
+            3    => 10f,   // "100", "ERR", "..."
+            _    => 7f,    // "AUTH"
+        };
+        using var font = new Font("Segoe UI", fontSize, FontStyle.Bold);
         using var brush = new SolidBrush(color);
         using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         g.DrawString(text, font, brush, new RectangleF(0, 0, sz, sz), fmt);
@@ -409,11 +446,11 @@ public sealed class MainForm : Form
     {
         // Re-embed the taskbar widget whenever Explorer restarts
         if (_taskbarCreatedMsg != 0 && m.Msg == (int)_taskbarCreatedMsg)
-            _taskbarWidget?.Reattach();
+            _widget?.Reattach();
         // Reposition + re-poll after wake from standby (timer doesn't count sleep time)
         if (m.Msg == WM_POWERBROADCAST && m.WParam.ToInt32() == PBT_APMRESUMEAUTOMATIC)
         {
-            _taskbarWidget?.Reposition();
+            _widget?.Reposition();
             // The taskbar may not have finished re-laying out at this point.
             // Schedule a second reposition after 2 s so the widget doesn't
             // sit on top of the "show hidden icons" chevron once the taskbar settles.
@@ -422,7 +459,7 @@ public sealed class MainForm : Form
             {
                 retryTimer.Stop();
                 retryTimer.Dispose();
-                _taskbarWidget?.Reposition();
+                _widget?.Reposition();
             };
             retryTimer.Start();
             _backoffMs = PollIntervalMs;
@@ -442,7 +479,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _cts.Cancel(); _cts.Dispose(); _pollGuard.Dispose(); _popup?.Dispose(); _taskbarWidget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
+        if (disposing) { _cts.Cancel(); _cts.Dispose(); _pollGuard.Dispose(); _popup?.Dispose(); _widget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
         base.Dispose(disposing);
     }
 }
