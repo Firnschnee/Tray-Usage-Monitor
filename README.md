@@ -40,7 +40,7 @@ That's it. If you're logged into Claude Code, the tray icon should show your ses
 
 One honest caveat: the account-wide percentages cover your usage on all channels (claude.ai web included), but the token/cost breakdown covers Claude Code only – claude.ai web usage never appears in the local JSONL logs, so there is no per-token detail for it.
 
-<img width="402" height="235" alt="Tray Usage Monitor" src="https://github.com/user-attachments/assets/0479ef8d-bcb8-445e-9b56-df71c411852c" />
+<img width="379" height="383" alt="Screenshot 2026-07-07 090934" src="https://github.com/user-attachments/assets/3b91a027-fbae-48e9-91c3-2987c49f507d" />
 
 If taskbar embedding isn't available (unsupported shell, modified taskbar), the app falls back gracefully to tray icon + popup only.
 
