@@ -125,6 +125,9 @@ public sealed class MainForm : Form
             _errors = 0;
             _backoffMs = PollIntervalMs;
             _pollTimer.Interval = PollIntervalMs;
+            // The timer is stopped after an auth failure; a successful poll
+            // (manual refresh after re-login) must bring it back. No-op if running.
+            _pollTimer.Start();
 
             _history.Add(new UsageSample(DateTime.UtcNow, data.SessionPercent,
                 data.HasWeekly ? data.WeeklyPercent : -1,
@@ -448,7 +451,8 @@ public sealed class MainForm : Form
         if (_taskbarCreatedMsg != 0 && m.Msg == (int)_taskbarCreatedMsg)
             _widget?.Reattach();
         // Reposition + re-poll after wake from standby (timer doesn't count sleep time)
-        if (m.Msg == WM_POWERBROADCAST && m.WParam.ToInt32() == PBT_APMRESUMEAUTOMATIC)
+        // ToInt64: some power events carry pointer-sized WParams; ToInt32 would throw
+        if (m.Msg == WM_POWERBROADCAST && m.WParam.ToInt64() == PBT_APMRESUMEAUTOMATIC)
         {
             _widget?.Reposition();
             // The taskbar may not have finished re-laying out at this point.
@@ -479,7 +483,7 @@ public sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _cts.Cancel(); _cts.Dispose(); _pollGuard.Dispose(); _popup?.Dispose(); _widget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
+        if (disposing) { _cts.Cancel(); _cts.Dispose(); _pollGuard.Dispose(); _popup?.Dispose(); _widget?.Dispose(); _pollTimer?.Dispose(); _trayIcon?.Dispose(); _fetcher?.Dispose(); _history?.Flush(); if (_trayIconHandle != IntPtr.Zero) Win32Interop.DestroyIcon(_trayIconHandle); }
         base.Dispose(disposing);
     }
 }

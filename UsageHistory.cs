@@ -27,6 +27,10 @@ public sealed class UsageHistory
     private readonly string _filePath;
     private readonly List<UsageSample> _samples = new();
 
+    // Saves run on the thread pool, chained so writes never interleave.
+    private readonly object _saveLock = new();
+    private Task _pendingSave = Task.CompletedTask;
+
     public IReadOnlyList<UsageSample> Samples => _samples;
 
     public UsageHistory(string filePath)
@@ -48,10 +52,31 @@ public sealed class UsageHistory
         _samples.Add(sample);
         var cutoff = sample.TimestampUtc - Retention;
         _samples.RemoveAll(s => s.TimestampUtc < cutoff);
+
+        var snapshot = _samples.ToArray();
+        lock (_saveLock)
+            _pendingSave = _pendingSave.ContinueWith(_ => Save(snapshot),
+                CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
+    /// <summary>Blocks until all queued saves have hit disk. Call before process exit.</summary>
+    public void Flush()
+    {
+        Task pending;
+        lock (_saveLock) pending = _pendingSave;
+        pending.Wait();
+    }
+
+    private void Save(UsageSample[] snapshot)
+    {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
-            File.WriteAllText(_filePath, JsonSerializer.Serialize(_samples));
+            // Write-then-move: a process kill mid-write truncates only the temp
+            // file, never the history itself.
+            var tmp = _filePath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(snapshot));
+            File.Move(tmp, _filePath, overwrite: true);
         }
         catch { /* persistence is best-effort; in-memory data stays valid */ }
     }

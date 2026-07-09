@@ -5,15 +5,34 @@ namespace ClaudeUsageMonitor;
 
 /// <summary>
 /// Reads the installed Claude Code version to build an accurate User-Agent header.
-/// Result is cached — claude --version is only executed once per process lifetime.
+/// Result is cached; claude --version is only executed once per process lifetime.
 /// </summary>
 internal static partial class ClaudeCodeInfo
 {
-    private static string? _cachedVersion;
+    private const string FallbackVersion = "2.1.69";
+
+    private static volatile string? _cachedVersion;
+    private static int _readStarted;
 
     internal static string UserAgent => $"claude-code/{Version}";
 
-    internal static string Version => _cachedVersion ??= ReadVersion();
+    /// <summary>
+    /// Never blocks the caller: the first access kicks off the version read on
+    /// the thread pool and returns the fallback until it completes. Requests made
+    /// in that window carry the fallback version; cosmetic, the UA only has to be
+    /// plausible.
+    /// </summary>
+    internal static string Version
+    {
+        get
+        {
+            var v = _cachedVersion;
+            if (v != null) return v;
+            if (Interlocked.Exchange(ref _readStarted, 1) == 0)
+                Task.Run(() => _cachedVersion = ReadVersion());
+            return FallbackVersion;
+        }
+    }
 
     private static string ReadVersion()
     {
@@ -30,7 +49,7 @@ internal static partial class ClaudeCodeInfo
             if (!proc.WaitForExit(3000))
             {
                 try { proc.Kill(); } catch { }
-                return "2.1.69";
+                return FallbackVersion;
             }
             var output = readTask.Result.Trim();
             var match = VersionRegex().Match(output);
@@ -39,7 +58,7 @@ internal static partial class ClaudeCodeInfo
         catch { }
 
         // Fallback if claude binary is not found or version cannot be parsed
-        return "2.1.69";
+        return FallbackVersion;
     }
 
     [GeneratedRegex(@"\d+\.\d+\.\d+")]

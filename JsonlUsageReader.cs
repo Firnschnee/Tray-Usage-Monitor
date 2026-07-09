@@ -50,32 +50,45 @@ public static class JsonlUsageReader
         var today = new Dictionary<string, ModelUsage>();
         var week = new Dictionary<string, ModelUsage>();
 
-        foreach (var file in Directory.EnumerateFiles(projectsDir, "*.jsonl", SearchOption.AllDirectories))
+        // IgnoreInaccessible: unreadable subdirectories must not abort the sweep.
+        // AttributesToSkip = 0 keeps hidden/system files visible (legacy behavior).
+        var enumOpts = new EnumerationOptions
         {
-            try
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0,
+        };
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(projectsDir, "*.jsonl", enumOpts))
             {
-                // A file untouched since the week began cannot contain in-week entries
-                if (File.GetLastWriteTimeUtc(file) < weekStartUtc) continue;
-
-                // Claude Code appends to these files while running - share everything
-                using var fs = new FileStream(file, FileMode.Open, FileAccess.Read,
-                    FileShare.ReadWrite | FileShare.Delete);
-                using var reader = new StreamReader(fs);
-
-                string? line;
-                while ((line = reader.ReadLine()) != null)
+                try
                 {
-                    if (!line.Contains("\"usage\"", StringComparison.Ordinal)) continue; // cheap pre-filter
-                    if (!TryParseLine(line, out var e) || e == null) continue;
-                    if (e.TimestampUtc < weekStartUtc) continue;
-                    if (e.MessageId.Length > 0 && !seen.Add(e.MessageId)) continue;
+                    // A file untouched since the week began cannot contain in-week entries
+                    if (File.GetLastWriteTimeUtc(file) < weekStartUtc) continue;
 
-                    Accumulate(week, e);
-                    if (e.TimestampUtc >= todayStartUtc) Accumulate(today, e);
+                    // Claude Code appends to these files while running - share everything
+                    using var fs = new FileStream(file, FileMode.Open, FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete);
+                    using var reader = new StreamReader(fs);
+
+                    string? line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        if (!line.Contains("\"usage\"", StringComparison.Ordinal)) continue; // cheap pre-filter
+                        if (!TryParseLine(line, out var e) || e == null) continue;
+                        if (e.TimestampUtc < weekStartUtc) continue;
+                        if (e.MessageId.Length > 0 && !seen.Add(e.MessageId)) continue;
+
+                        Accumulate(week, e);
+                        if (e.TimestampUtc >= todayStartUtc) Accumulate(today, e);
+                    }
                 }
+                catch { /* unreadable file: skip */ }
             }
-            catch { /* unreadable file: skip; the sweep must never throw */ }
         }
+        catch { /* enumeration died mid-sweep (e.g. dir vanished): return what we have */ }
 
         return new LocalUsageReport(Sorted(today), Sorted(week));
     }

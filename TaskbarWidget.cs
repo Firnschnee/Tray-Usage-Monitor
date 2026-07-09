@@ -116,10 +116,11 @@ internal sealed class TaskbarWidget : IDisposable
 
     private sealed class WidgetNativeWindow : NativeWindow, IDisposable
     {
-        private const int WM_MOUSEMOVE   = 0x0200;
-        private const int WM_LBUTTONDOWN = 0x0201;
-        private const int WM_LBUTTONUP   = 0x0202;
-        private const int WM_RBUTTONUP   = 0x0205;
+        private const int WM_MOUSEMOVE      = 0x0200;
+        private const int WM_LBUTTONDOWN    = 0x0201;
+        private const int WM_LBUTTONUP      = 0x0202;
+        private const int WM_RBUTTONUP      = 0x0205;
+        private const int WM_CAPTURECHANGED = 0x0215;
         private const int DragThreshold  = 3;
 
         private readonly int _w, _h;
@@ -268,7 +269,7 @@ internal sealed class TaskbarWidget : IDisposable
             switch (m.Msg)
             {
                 case WM_LBUTTONDOWN:
-                    OnLButtonDown(m.LParam.ToInt32());
+                    OnLButtonDown(unchecked((int)m.LParam.ToInt64()));
                     return;
 
                 case WM_MOUSEMOVE:
@@ -280,8 +281,12 @@ internal sealed class TaskbarWidget : IDisposable
                     return;
 
                 case WM_RBUTTONUP:
-                    ShowContextMenu(m.LParam.ToInt32());
+                    ShowContextMenu(unchecked((int)m.LParam.ToInt64()));
                     return;
+
+                case WM_CAPTURECHANGED:
+                    OnCaptureChanged();
+                    break; // fall through to base
             }
             base.WndProc(ref m);
         }
@@ -332,6 +337,23 @@ internal sealed class TaskbarWidget : IDisposable
             else
             {
                 OnLeftClick?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// Capture was taken away mid-drag (Alt-Tab, UAC prompt, another SetCapture).
+        /// Without this, _dragging stays true and a later hover moves the widget
+        /// with no button pressed. Commit the position like a normal drag end,
+        /// but never treat it as a click.
+        /// </summary>
+        private void OnCaptureChanged()
+        {
+            if (!_dragging) return;
+            _dragging = false;
+            if (_moved)
+            {
+                _settings.WidgetOffsetX = _dragMaxX - _currentX;
+                _settings.Save();
             }
         }
 

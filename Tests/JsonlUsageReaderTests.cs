@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Xunit;
 
 namespace ClaudeUsageMonitor.Tests;
@@ -69,6 +71,40 @@ public sealed class JsonlUsageReaderTests : IDisposable
         Assert.Single(report.Today);          // only msg_1
         var sonnetWeek = report.Week.Single(m => m.Model == "claude-sonnet-5");
         Assert.Equal(100, sonnetWeek.InputTokens); // dedup: counted once
+    }
+
+    [Fact]
+    public void SkipsInaccessibleSubdirectories()
+    {
+        var good = Path.Combine(_dir, "proj-a", "session1.jsonl");
+        File.WriteAllLines(good, new[] { Line("msg_1", "claude-sonnet-5", "2026-07-06T10:00:00.000Z") });
+        File.SetLastWriteTimeUtc(good, DateTime.UtcNow);
+
+        var locked = Directory.CreateDirectory(Path.Combine(_dir, "proj-locked"));
+        File.WriteAllText(Path.Combine(locked.FullName, "hidden.jsonl"),
+            Line("msg_2", "claude-sonnet-5", "2026-07-06T10:00:00.000Z"));
+
+        var user = WindowsIdentity.GetCurrent().User!;
+        var rule = new FileSystemAccessRule(user, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        var sec = locked.GetAccessControl();
+        sec.AddAccessRule(rule);
+        locked.SetAccessControl(sec);
+
+        try
+        {
+            var report = JsonlUsageReader.Read(_dir,
+                todayStartUtc: new DateTime(2026, 7, 6, 0, 0, 0, DateTimeKind.Utc),
+                weekStartUtc: new DateTime(2026, 7, 2, 7, 0, 0, DateTimeKind.Utc));
+
+            // The accessible project must still be aggregated; the locked one is skipped.
+            var sonnet = Assert.Single(report.Week);
+            Assert.Equal(100, sonnet.InputTokens);
+        }
+        finally
+        {
+            sec.RemoveAccessRule(rule);
+            locked.SetAccessControl(sec);
+        }
     }
 
     [Fact]

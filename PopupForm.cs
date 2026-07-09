@@ -17,6 +17,15 @@ public sealed class PopupForm : Form
     private static readonly Color CGray   = Color.FromArgb(140, 140, 150);
     private static readonly Color CAccent = Color.FromArgb(217, 119, 87);
 
+    // Controls do not dispose assigned fonts; shared instances avoid rebuilding
+    // GDI handles on every poll-driven Rebuild while the popup is open.
+    private static readonly Font FBase   = new("Segoe UI", 9.5f);
+    private static readonly Font FHeader = new("Segoe UI", 8f, FontStyle.Bold);
+    private static readonly Font FBar    = new("Segoe UI", 10f, FontStyle.Bold);
+    private static readonly Font FSub    = new("Segoe UI", 8.5f);
+    private static readonly Font FInfo   = new("Segoe UI", 9f);
+    private static readonly Font FSmall  = new("Segoe UI", 8f);
+
     // JSONL scans are file-system sweeps; cache the result across popup openings
     private static LocalUsageReport? _cachedReport;
     private static DateTime _cacheTimeUtc;
@@ -24,15 +33,21 @@ public sealed class PopupForm : Form
     private readonly UsageHistory _history;
     private UsageData _data;
 
+    // Screen the popup opens on: the one under the cursor at open time (the user
+    // just clicked the tray icon or widget there). Captured once so poll-driven
+    // Rebuilds don't hop monitors when the cursor has moved elsewhere.
+    private readonly Rectangle _workArea;
+
     public PopupForm(UsageData data, UsageHistory history)
     {
         _data = data;
         _history = history;
+        _workArea = Screen.FromPoint(Cursor.Position).WorkingArea;
 
         FormBorderStyle = FormBorderStyle.None;
         BackColor = CBg;
         ForeColor = Color.White;
-        Font = new Font("Segoe UI", 9.5f);
+        Font = FBase;
         TopMost = true;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -98,14 +113,13 @@ public sealed class PopupForm : Form
         Controls.Add(new Label
         {
             Text = $"Updated {d.FetchedAt:HH:mm:ss}",
-            ForeColor = CGray, Font = new Font("Segoe UI", 8f),
+            ForeColor = CGray, Font = FSmall,
             Location = new Point(16, y), AutoSize = true,
         });
         y += 26;
 
         ClientSize = new Size(W, y);
-        var wa = Screen.PrimaryScreen!.WorkingArea;
-        Location = new Point(wa.Right - W - 12, wa.Bottom - Height - 12);
+        Location = new Point(_workArea.Right - W - 12, _workArea.Bottom - Height - 12);
 
         ResumeLayout();
         LoadLocalUsage(todayLbl, weekLbl, modelsLbl);
@@ -138,13 +152,18 @@ public sealed class PopupForm : Form
         Task.Run(() => JsonlUsageReader.Read(JsonlUsageReader.DefaultProjectsDir, todayStart, weekStart))
             .ContinueWith(t =>
             {
-                if (!t.IsCompletedSuccessfully || IsDisposed) return;
+                if (IsDisposed) return;
                 BeginInvoke(() =>
                 {
+                    if (todayLbl.IsDisposed) return;
+                    if (!t.IsCompletedSuccessfully)
+                    {
+                        todayLbl.Text = "Local data unavailable.";
+                        return;
+                    }
                     _cachedReport = t.Result;
                     _cacheTimeUtc = DateTime.UtcNow;
-                    if (!todayLbl.IsDisposed)
-                        ApplyLocalUsage(t.Result, todayLbl, weekLbl, modelsLbl);
+                    ApplyLocalUsage(t.Result, todayLbl, weekLbl, modelsLbl);
                 });
             });
     }
@@ -175,7 +194,7 @@ public sealed class PopupForm : Form
         Controls.Add(new Label
         {
             Text = text, ForeColor = CGray,
-            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
+            Font = FHeader,
             Location = new Point(16, y), AutoSize = true,
         });
         y += 22;
@@ -188,7 +207,7 @@ public sealed class PopupForm : Form
         Controls.Add(new Label
         {
             Text = $"{label}: {pct:0.0}%", ForeColor = color,
-            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+            Font = FBar,
             Location = new Point(16, y), Size = new Size(W - 32, 20),
         });
         y += 22;
@@ -208,7 +227,7 @@ public sealed class PopupForm : Form
 
         Controls.Add(new Label
         {
-            Text = sub, ForeColor = CGray, Font = new Font("Segoe UI", 8.5f),
+            Text = sub, ForeColor = CGray, Font = FSub,
             Location = new Point(16, y), Size = new Size(W - 32, 16),
         });
         y += 16;
@@ -217,7 +236,7 @@ public sealed class PopupForm : Form
         {
             Controls.Add(new Label
             {
-                Text = forecast, ForeColor = CAccent, Font = new Font("Segoe UI", 8.5f),
+                Text = forecast, ForeColor = CAccent, Font = FSub,
                 Location = new Point(16, y), Size = new Size(W - 32, 16),
             });
             y += 16;
@@ -235,7 +254,7 @@ public sealed class PopupForm : Form
     {
         var l = new Label
         {
-            Text = text, ForeColor = Color.White, Font = new Font("Segoe UI", 9f),
+            Text = text, ForeColor = Color.White, Font = FInfo,
             Location = new Point(16, y), Size = new Size(W - 32, 18),
         };
         Controls.Add(l);
