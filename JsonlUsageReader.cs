@@ -7,21 +7,36 @@ public sealed record ModelUsage(string Model, long InputTokens, long OutputToken
 {
     public long TotalTokens => InputTokens + OutputTokens + CacheCreateTokens + CacheReadTokens;
 
-    public decimal CostUsd
+    public decimal CostUsd => CostAt(DateTime.UtcNow);
+
+    internal decimal CostAt(DateTime nowUtc)
     {
-        get
-        {
-            var (pin, pout, pwrite, pread) = Prices(Model);
-            return (InputTokens * pin + OutputTokens * pout
-                  + CacheCreateTokens * pwrite + CacheReadTokens * pread) / 1_000_000m;
-        }
+        var (pin, pout, pwrite, pread) = Prices(Model, nowUtc);
+        return (InputTokens * pin + OutputTokens * pout
+              + CacheCreateTokens * pwrite + CacheReadTokens * pread) / 1_000_000m;
     }
 
-    // Prices per million tokens: (input, output, cache write, cache read)
-    private static (decimal In, decimal Out, decimal Write, decimal Read) Prices(string model) =>
-        model.Contains("haiku", StringComparison.OrdinalIgnoreCase)  ? (1m, 5m, 1.25m, 0.10m) :
-        model.Contains("sonnet", StringComparison.OrdinalIgnoreCase) ? (3m, 15m, 3.75m, 0.30m) :
-        (15m, 75m, 18.75m, 1.50m); // opus tier; also the fallback for unknown flagship models
+    // Sonnet 5 introductory pricing ($2/$10) runs through 2026-08-31.
+    private static readonly DateTime Sonnet5IntroEndsUtc = new(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    // Prices per million tokens: (input, output, cache write 5m, cache read).
+    // The JSONL cache_creation field does not split 5m vs 1h writes; everything
+    // is billed at the 5m rate (slight underestimate for 1h writes).
+    private static (decimal In, decimal Out, decimal Write, decimal Read) Prices(string model, DateTime nowUtc)
+    {
+        bool Has(string s) => model.Contains(s, StringComparison.OrdinalIgnoreCase);
+
+        if (Has("haiku")) return (1m, 5m, 1.25m, 0.10m);
+        if (Has("sonnet-5")) return nowUtc < Sonnet5IntroEndsUtc
+            ? (2m, 10m, 2.50m, 0.20m)
+            : (3m, 15m, 3.75m, 0.30m);
+        if (Has("sonnet")) return (3m, 15m, 3.75m, 0.30m);
+        // Legacy tier: Opus 4.1 and the dated Opus 4 id (claude-opus-4-2025xxxx)
+        if (Has("opus-4-1") || Has("opus-4-2025")) return (15m, 75m, 18.75m, 1.50m);
+        if (Has("opus")) return (5m, 25m, 6.25m, 0.50m);
+        // Fable/Mythos tier; also the fallback for unknown flagship models
+        return (10m, 50m, 12.50m, 1m);
+    }
 }
 
 public sealed record LocalUsageReport(IReadOnlyList<ModelUsage> Today, IReadOnlyList<ModelUsage> Week)

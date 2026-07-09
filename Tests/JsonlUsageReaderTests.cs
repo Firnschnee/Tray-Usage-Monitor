@@ -115,19 +115,45 @@ public sealed class JsonlUsageReaderTests : IDisposable
         Assert.Empty(report.Today);
     }
 
+    // Fixed reference date inside the Sonnet 5 intro-pricing period
+    private static readonly DateTime July2026 = new(2026, 7, 9, 12, 0, 0, DateTimeKind.Utc);
+
     [Fact]
     public void CostUsesPerModelPricing()
     {
-        // Sonnet: $3/M in + $15/M out - 1M each = $18
-        var sonnet = new ModelUsage("claude-sonnet-5", 1_000_000, 1_000_000, 0, 0);
-        Assert.Equal(18m, sonnet.CostUsd);
-
         // Haiku: $1/M in + $5/M out
-        var haiku = new ModelUsage("claude-haiku-4-5", 1_000_000, 1_000_000, 0, 0);
-        Assert.Equal(6m, haiku.CostUsd);
+        Assert.Equal(6m, new ModelUsage("claude-haiku-4-5", 1_000_000, 1_000_000, 0, 0).CostAt(July2026));
 
-        // Unknown flagship falls back to opus-tier pricing: $15/M in + $75/M out
-        var fable = new ModelUsage("claude-fable-5", 1_000_000, 1_000_000, 0, 0);
-        Assert.Equal(90m, fable.CostUsd);
+        // Fable: $10/M in + $50/M out
+        Assert.Equal(60m, new ModelUsage("claude-fable-5", 1_000_000, 1_000_000, 0, 0).CostAt(July2026));
+
+        // Fable cache: $12.50/M write (5m) + $1/M read
+        Assert.Equal(13.50m, new ModelUsage("claude-fable-5", 0, 0, 1_000_000, 1_000_000).CostAt(July2026));
+
+        // Modern Opus (4.5+): $5/M in + $25/M out
+        Assert.Equal(30m, new ModelUsage("claude-opus-4-8", 1_000_000, 1_000_000, 0, 0).CostAt(July2026));
+
+        // Legacy Opus 4.1 / Opus 4: $15/M in + $75/M out
+        Assert.Equal(90m, new ModelUsage("claude-opus-4-1-20250805", 1_000_000, 1_000_000, 0, 0).CostAt(July2026));
+        Assert.Equal(90m, new ModelUsage("claude-opus-4-20250514", 1_000_000, 1_000_000, 0, 0).CostAt(July2026));
+
+        // Older Sonnet: standard $3/M in + $15/M out
+        Assert.Equal(18m, new ModelUsage("claude-sonnet-4-6", 1_000_000, 1_000_000, 0, 0).CostAt(July2026));
+
+        // Unknown flagship falls back to fable-tier pricing
+        Assert.Equal(60m, new ModelUsage("claude-nova-6", 1_000_000, 1_000_000, 0, 0).CostAt(July2026));
+    }
+
+    [Fact]
+    public void Sonnet5IntroPricingEndsSeptember2026()
+    {
+        var sonnet5 = new ModelUsage("claude-sonnet-5", 1_000_000, 1_000_000, 0, 0);
+
+        // Intro: $2/M in + $10/M out through 2026-08-31
+        Assert.Equal(12m, sonnet5.CostAt(July2026));
+        Assert.Equal(12m, sonnet5.CostAt(new DateTime(2026, 8, 31, 23, 59, 0, DateTimeKind.Utc)));
+
+        // Standard: $3/M in + $15/M out from 2026-09-01
+        Assert.Equal(18m, sonnet5.CostAt(new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc)));
     }
 }
